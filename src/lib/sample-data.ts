@@ -14,6 +14,7 @@ export const defaultSettings: CmsSettings = {
   columnGap: 24,
   lineHeight: 1.38,
   showPageNumbers: true,
+  documentYear: `${new Date().getFullYear() - 1}–${new Date().getFullYear()}`,
 }
 
 export const seedPages: CmsPage[] = [

@@ -88,6 +88,7 @@ export interface CmsSettings {
   columnGap: number
   lineHeight: number
   showPageNumbers: boolean
+  documentYear: string
 }
 
 export interface RenderTextBlock {

@@ -59,15 +59,25 @@ function getColumnX(settings: CmsSettings, column: 0 | 1) {
 
 function getPageTitleBlocks(page: CmsPage, settings: CmsSettings, pageNumber: number): RenderTextBlock[] {
   const scale = getScale(settings)
+  const titleWidth = PAGE_WIDTH - settings.pagePaddingX * 2
+  const titleFontSize = (page.type === 'program' ? settings.titleSize * 1.95 : settings.titleSize) * scale
+  const titleLineHeight = (page.type === 'program' ? settings.titleSize * 2.2 : settings.titleSize * 1.2) * scale
+
+  // Wrap each heading line so the layout engine uses the true rendered line count,
+  // preventing subsequent content blocks from overlapping the title.
+  const wrappedTitleLines = page.content.heading
+    .split('\n')
+    .flatMap((line) => wrapParagraph(line || ' ', titleWidth, titleFontSize, 'bold'))
+
   const blocks: RenderTextBlock[] = [
     {
       id: `${page.id}-title-${pageNumber}`,
       x: settings.pagePaddingX,
       y: settings.pagePaddingTop,
-      width: PAGE_WIDTH - settings.pagePaddingX * 2,
-      lines: page.type === 'core' ? page.content.heading.split('\n') : [page.content.heading],
-      fontSize: (page.type === 'program' ? settings.titleSize * 1.95 : settings.titleSize) * scale,
-      lineHeight: (page.type === 'program' ? settings.titleSize * 2.2 : settings.titleSize * 1.2) * scale,
+      width: titleWidth,
+      lines: wrappedTitleLines,
+      fontSize: titleFontSize,
+      lineHeight: titleLineHeight,
       fontWeight: 'bold',
       fontStyle: 'normal',
       align: 'center',
@@ -82,9 +92,9 @@ function getPageTitleBlocks(page: CmsPage, settings: CmsSettings, pageNumber: nu
       x: settings.pagePaddingX,
       y:
         settings.pagePaddingTop +
-        blocks[0].lines.length * blocks[0].lineHeight +
+        blocks[0].lines.length * titleLineHeight +
         Math.round(8 * scale),
-      width: PAGE_WIDTH - settings.pagePaddingX * 2,
+      width: titleWidth,
       lines: [page.content.subheading],
       fontSize: settings.subtitleSize * scale,
       lineHeight: settings.subtitleSize * 1.25 * scale,
