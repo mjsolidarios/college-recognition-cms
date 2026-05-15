@@ -2,6 +2,7 @@ import { BookOpen, ChevronDown, Download, FileImage, FileText, GripVertical, Lay
 import { useCallback, useMemo, useRef, useState } from 'react'
 
 import { CanvasPreview } from '@/components/canvas-preview'
+import { ExportDialog, ImportDialog } from '@/components/import-export-dialog'
 import { PageEditor } from '@/components/page-editor'
 import { PageList } from '@/components/page-list'
 import { Button } from '@/components/ui/button'
@@ -267,6 +268,19 @@ function App() {
     exportSvgDocument(renderedPages, documentTitle)
   }
 
+  const handleImport = (importedPages: CmsPage[], importedSettings?: CmsSettings, importedTitle?: string) => {
+    // Clear existing pages from storage first
+    pages.forEach((page) => deletePage(page.id))
+    persistPages(importedPages)
+    if (importedSettings) {
+      setSettings(saveSettings(importedSettings))
+    }
+    if (importedTitle) {
+      setDocumentTitle(importedTitle)
+    }
+    setActivePageId(importedPages[0]?.id ?? '')
+  }
+
   /* ── Resize drag handle ─────────────────────────────────── */
   const handleDragMouseDown = useCallback((e: React.MouseEvent) => {
     dragRef.current = { startX: e.clientX, startWidth: editorWidth }
@@ -500,6 +514,8 @@ function App() {
                 <FileImage className="size-3.5" />
                 <span className="hidden sm:inline">SVG</span>
               </Button>
+              <ExportDialog pages={pages} settings={settings} title={documentTitle} />
+              <ImportDialog pages={pages} onImport={handleImport} />
               <Button
                 type="button"
                 size="sm"

@@ -1,4 +1,6 @@
 import { ChevronDown, Plus, Trash2 } from 'lucide-react'
+
+import { BulkAddAcademicDialog, BulkAddNonAcademicDialog } from '@/components/bulk-add-dialog'
 import { useState } from 'react'
 
 import { Button } from '@/components/ui/button'
@@ -294,28 +296,38 @@ function AcademicEditor({ page, onChange }: { page: AcademicPage; onChange: (pag
             </CollapsibleItemCard>
           ))}
         </div>
-        <AddButton
-          onClick={() =>
-            onChange({
-              ...page,
-              content: {
-                ...page.content,
-                entries: [
-                  ...page.content.entries,
-                  {
-                    id: crypto.randomUUID(),
-                    name: 'New awardee',
-                    award: 'Award or program',
-                    category: 'Category',
-                    gradeLevel: 'Grade level',
-                  },
-                ],
-              },
-            })
-          }
-        >
-          Add awardee
-        </AddButton>
+        <div className="grid grid-cols-2 gap-2">
+          <AddButton
+            onClick={() =>
+              onChange({
+                ...page,
+                content: {
+                  ...page.content,
+                  entries: [
+                    ...page.content.entries,
+                    {
+                      id: crypto.randomUUID(),
+                      name: 'New awardee',
+                      award: 'Award or program',
+                      category: 'Category',
+                      gradeLevel: 'Grade level',
+                    },
+                  ],
+                },
+              })
+            }
+          >
+            Add awardee
+          </AddButton>
+          <BulkAddAcademicDialog
+            onAdd={(entries) =>
+              onChange({
+                ...page,
+                content: { ...page.content, entries: [...page.content.entries, ...entries] },
+              })
+            }
+          />
+        </div>
       </div>
     </EditorChrome>
   )
@@ -379,27 +391,37 @@ function NonAcademicEditor({ page, onChange }: { page: NonAcademicPage; onChange
             </CollapsibleItemCard>
           ))}
         </div>
-        <AddButton
-          onClick={() =>
-            onChange({
-              ...page,
-              content: {
-                ...page.content,
-                entries: [
-                  ...page.content.entries,
-                  {
-                    id: crypto.randomUUID(),
-                    name: 'New awardee',
-                    award: 'Award',
-                    category: 'Category',
-                  },
-                ],
-              },
-            })
-          }
-        >
-          Add award
-        </AddButton>
+        <div className="grid grid-cols-2 gap-2">
+          <AddButton
+            onClick={() =>
+              onChange({
+                ...page,
+                content: {
+                  ...page.content,
+                  entries: [
+                    ...page.content.entries,
+                    {
+                      id: crypto.randomUUID(),
+                      name: 'New awardee',
+                      award: 'Award',
+                      category: 'Category',
+                    },
+                  ],
+                },
+              })
+            }
+          >
+            Add award
+          </AddButton>
+          <BulkAddNonAcademicDialog
+            onAdd={(entries) =>
+              onChange({
+                ...page,
+                content: { ...page.content, entries: [...page.content.entries, ...entries] },
+              })
+            }
+          />
+        </div>
       </div>
     </EditorChrome>
   )
