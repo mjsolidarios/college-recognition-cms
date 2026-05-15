@@ -14,7 +14,13 @@ export const defaultSettings: CmsSettings = {
   columnGap: 24,
   lineHeight: 1.38,
   showPageNumbers: true,
-  documentYear: `${new Date().getFullYear() - 1}–${new Date().getFullYear()}`,
+  documentYear: (() => {
+    const now = new Date()
+    const year = now.getFullYear()
+    // Academic year starts in July; before July we are still in the previous year's cycle
+    const startYear = now.getMonth() >= 6 ? year : year - 1
+    return `${startYear}–${startYear + 1}`
+  })(),
 }
 
 export const seedPages: CmsPage[] = [

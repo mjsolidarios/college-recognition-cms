@@ -284,6 +284,17 @@ function App() {
     document.addEventListener('mouseup', onUp)
   }, [editorWidth])
 
+  /* ── Mobile page-list callbacks ────────────────────────── */
+  const handleMobileSelect = useCallback((id: string) => {
+    setActivePageId(id)
+    setMobileTab('canvas')
+  }, [])
+
+  const handleMobileAdd = useCallback((type: PageType) => {
+    handleAddPage(type)
+    setMobileTab('canvas')
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
   /* ── Shared editor/settings panel ──────────────────────── */
   const EditorSettingsPanel = (
     <Tabs defaultValue="editor" className="min-h-0 flex flex-col h-full">
@@ -571,8 +582,8 @@ function App() {
             <PageList
               pages={pages}
               activePageId={activePage?.id ?? ''}
-              onSelect={(id) => { setActivePageId(id); setMobileTab('canvas') }}
-              onAdd={(type) => { handleAddPage(type); setMobileTab('canvas') }}
+              onSelect={handleMobileSelect}
+              onAdd={handleMobileAdd}
               onDelete={handleDeletePage}
               onReorder={handleReorder}
             />
