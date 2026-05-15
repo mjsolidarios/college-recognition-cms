@@ -25,10 +25,10 @@ import type {
 } from '@/types/cms'
 
 const TYPE_COLORS: Record<string, string> = {
-  core: 'from-indigo-500 to-indigo-600',
-  program: 'from-amber-500 to-amber-600',
-  academic: 'from-emerald-500 to-emerald-600',
-  'non-academic': 'from-rose-500 to-rose-600',
+  core: 'bg-indigo-500',
+  program: 'bg-amber-500',
+  academic: 'bg-emerald-500',
+  'non-academic': 'bg-rose-500',
 }
 
 function SectionLabel({ children }: { children: string }) {
@@ -103,7 +103,7 @@ function EditorChrome({ page, children }: { page: CmsPage; children: React.React
   return (
     <div className="flex h-full flex-col rounded-xl border border-stone-200/80 bg-white shadow-sm">
       {/* Type color bar */}
-      <div className={cn('h-1 rounded-t-xl bg-gradient-to-r', TYPE_COLORS[page.type])} />
+      <div className={cn('h-1 rounded-t-xl', TYPE_COLORS[page.type])} />
 
       <div className="flex flex-col gap-1 p-4 pb-2">
         <h3 className="text-sm font-semibold text-stone-900">Editor</h3>

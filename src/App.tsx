@@ -1,10 +1,11 @@
-import { ChevronDown, Download, FileImage, FileText, RefreshCw, Sparkles } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { BookOpen, ChevronDown, Download, FileImage, FileText, GripVertical, LayoutGrid, Pencil, RefreshCw } from 'lucide-react'
+import { useCallback, useMemo, useRef, useState } from 'react'
 
 import { CanvasPreview } from '@/components/canvas-preview'
 import { PageEditor } from '@/components/page-editor'
 import { PageList } from '@/components/page-list'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { renderDocument } from '@/lib/layout'
@@ -19,6 +20,8 @@ const PAGE_LABELS: Record<PageType, string> = {
   academic: 'Academic Awards',
   'non-academic': 'Non-Academic Awards',
 }
+
+type MobileTab = 'pages' | 'canvas' | 'editor'
 
 function createBlankPage(pageType: PageType, order: number): CmsPage {
   switch (pageType) {
@@ -185,12 +188,19 @@ function SliderSetting({
 
 /* ── Main App ────────────────────────────────────────────── */
 
+const MIN_EDITOR_WIDTH = 280
+const MAX_EDITOR_WIDTH = 560
+const DEFAULT_EDITOR_WIDTH = 360
+
 function App() {
   const [pages, setPages] = useState<CmsPage[]>(() => getPages())
   const [settings, setSettings] = useState<CmsSettings>(() => getSettings())
   const [activePageId, setActivePageId] = useState(() => getPages()[0]?.id ?? '')
   const [documentTitle, setDocumentTitle] = useState('College Recognition Program')
   const [isExporting, setIsExporting] = useState(false)
+  const [mobileTab, setMobileTab] = useState<MobileTab>('canvas')
+  const [editorWidth, setEditorWidth] = useState(DEFAULT_EDITOR_WIDTH)
+  const dragRef = useRef<{ startX: number; startWidth: number } | null>(null)
 
   const activePage = useMemo(
     () => pages.find((page) => page.id === activePageId) ?? pages[0],
@@ -257,227 +267,335 @@ function App() {
     exportSvgDocument(renderedPages, documentTitle)
   }
 
+  /* ── Resize drag handle ─────────────────────────────────── */
+  const handleDragMouseDown = useCallback((e: React.MouseEvent) => {
+    dragRef.current = { startX: e.clientX, startWidth: editorWidth }
+    const onMove = (ev: MouseEvent) => {
+      if (!dragRef.current) return
+      const delta = dragRef.current.startX - ev.clientX
+      setEditorWidth(Math.max(MIN_EDITOR_WIDTH, Math.min(MAX_EDITOR_WIDTH, dragRef.current.startWidth + delta)))
+    }
+    const onUp = () => {
+      dragRef.current = null
+      document.removeEventListener('mousemove', onMove)
+      document.removeEventListener('mouseup', onUp)
+    }
+    document.addEventListener('mousemove', onMove)
+    document.addEventListener('mouseup', onUp)
+  }, [editorWidth])
+
+  /* ── Mobile page-list callbacks ────────────────────────── */
+  const handleMobileSelect = useCallback((id: string) => {
+    setActivePageId(id)
+    setMobileTab('canvas')
+  }, [])
+
+  const handleMobileAdd = useCallback((type: PageType) => {
+    handleAddPage(type)
+    setMobileTab('canvas')
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  /* ── Shared editor/settings panel ──────────────────────── */
+  const EditorSettingsPanel = (
+    <Tabs defaultValue="editor" className="min-h-0 flex flex-col h-full">
+      <TabsList className="grid w-full grid-cols-2 flex-shrink-0">
+        <TabsTrigger value="editor">Editor</TabsTrigger>
+        <TabsTrigger value="settings">Settings</TabsTrigger>
+      </TabsList>
+      <TabsContent value="editor" className="min-h-0 flex-1">
+        <ScrollArea className="h-[calc(100vh-14rem)] xl:h-[calc(100vh-11rem)]">
+          {activePage ? <PageEditor page={activePage} onChange={handlePageChange} /> : null}
+        </ScrollArea>
+      </TabsContent>
+      <TabsContent value="settings" className="min-h-0 flex-1">
+        <ScrollArea className="h-[calc(100vh-14rem)] xl:h-[calc(100vh-11rem)]">
+          <div className="space-y-3 pb-2">
+            {/* Document */}
+            <SettingsGroup title="Document">
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-stone-600">Academic year</label>
+                <Input
+                  value={settings.documentYear}
+                  onChange={(e) => updateSetting('documentYear', e.target.value)}
+                  placeholder="e.g. 2024–2025"
+                  className="h-8 text-xs"
+                />
+              </div>
+            </SettingsGroup>
+
+            {/* Scale */}
+            <SettingsGroup title="Scale">
+              <SliderSetting
+                label="Global scale"
+                value={settings.globalScale}
+                min={0.8} max={1.4} step={0.05}
+                unit="×"
+                onChange={(v) => updateSetting('globalScale', v)}
+              />
+            </SettingsGroup>
+
+            {/* Typography */}
+            <SettingsGroup title="Typography">
+              <SliderSetting
+                label="Title size"
+                value={settings.titleSize}
+                min={14} max={28} step={0.5}
+                unit="px"
+                onChange={(v) => updateSetting('titleSize', v)}
+              />
+              <SliderSetting
+                label="Subtitle size"
+                value={settings.subtitleSize}
+                min={10} max={18} step={0.5}
+                unit="px"
+                onChange={(v) => updateSetting('subtitleSize', v)}
+              />
+              <SliderSetting
+                label="Section heading"
+                value={settings.headingSize}
+                min={10} max={18} step={0.5}
+                unit="px"
+                onChange={(v) => updateSetting('headingSize', v)}
+              />
+              <SliderSetting
+                label="Body size"
+                value={settings.bodySize}
+                min={9} max={16} step={0.25}
+                unit="px"
+                onChange={(v) => updateSetting('bodySize', v)}
+              />
+              <SliderSetting
+                label="Meta size"
+                value={settings.metaSize}
+                min={8} max={14} step={0.25}
+                unit="px"
+                onChange={(v) => updateSetting('metaSize', v)}
+              />
+              <SliderSetting
+                label="Page number size"
+                value={settings.pageNumberSize}
+                min={8} max={14} step={0.25}
+                unit="px"
+                onChange={(v) => updateSetting('pageNumberSize', v)}
+              />
+              <SliderSetting
+                label="Line height"
+                value={settings.lineHeight}
+                min={1.1} max={1.8} step={0.05}
+                unit="×"
+                onChange={(v) => updateSetting('lineHeight', v)}
+              />
+            </SettingsGroup>
+
+            {/* Layout */}
+            <SettingsGroup title="Layout">
+              <SliderSetting
+                label="Top padding"
+                value={settings.pagePaddingTop}
+                min={24} max={72} step={1}
+                unit="px"
+                onChange={(v) => updateSetting('pagePaddingTop', v)}
+              />
+              <SliderSetting
+                label="Bottom padding"
+                value={settings.pagePaddingBottom}
+                min={20} max={72} step={1}
+                unit="px"
+                onChange={(v) => updateSetting('pagePaddingBottom', v)}
+              />
+              <SliderSetting
+                label="Side padding"
+                value={settings.pagePaddingX}
+                min={24} max={72} step={1}
+                unit="px"
+                onChange={(v) => updateSetting('pagePaddingX', v)}
+              />
+              <SliderSetting
+                label="Column gap"
+                value={settings.columnGap}
+                min={16} max={48} step={1}
+                unit="px"
+                onChange={(v) => updateSetting('columnGap', v)}
+              />
+            </SettingsGroup>
+
+            {/* Display */}
+            <SettingsGroup title="Display">
+              <label className="flex items-center justify-between gap-3 rounded-lg py-1 text-xs font-medium text-stone-600">
+                Show page numbers
+                <span className="toggle-switch">
+                  <input
+                    type="checkbox"
+                    checked={settings.showPageNumbers}
+                    onChange={(event) => updateSetting('showPageNumbers', event.target.checked)}
+                  />
+                  <span className="toggle-track" />
+                </span>
+              </label>
+            </SettingsGroup>
+          </div>
+        </ScrollArea>
+      </TabsContent>
+    </Tabs>
+  )
+
   return (
     <div className="min-h-screen bg-[var(--surface-app)] text-stone-950">
-      <div className="mx-auto flex min-h-screen max-w-[1800px] flex-col gap-4 px-4 py-3 xl:px-5">
-        {/* ── Header ──────────────────────────────────────── */}
-        <header className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 px-6 py-5 text-white shadow-lg shadow-indigo-950/10">
-          {/* Decorative glow */}
-          <div className="pointer-events-none absolute -right-20 -top-20 size-64 rounded-full bg-indigo-500/10 blur-3xl" />
-          <div className="pointer-events-none absolute -bottom-16 -left-16 size-48 rounded-full bg-indigo-400/5 blur-2xl" />
+      <div className="mx-auto flex min-h-screen max-w-[1800px] flex-col gap-3 px-3 py-3 xl:px-5">
 
-          <div className="relative flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-            <div className="space-y-1.5">
-              <div className="flex items-center gap-2">
-                <Sparkles className="size-4 text-indigo-400" />
-                <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-indigo-300">
-                  Recognition CMS
-                </p>
+        {/* ── Header ──────────────────────────────────────── */}
+        <header className="rounded-xl border border-slate-800 bg-slate-900 px-4 py-3 text-white shadow-md">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+
+            {/* Brand */}
+            <div className="flex items-center gap-3">
+              <div className="flex size-9 flex-shrink-0 items-center justify-center rounded-lg border border-slate-700 bg-slate-800">
+                <BookOpen className="size-4.5 text-indigo-400" />
               </div>
-              <h1 className="text-2xl font-bold tracking-tight text-white">
-                Booklet Builder
-              </h1>
-              <p className="max-w-xl text-sm text-indigo-200/70">
-                Build ceremony programs, award pages, and core content with live pagination and export.
-              </p>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h1 className="text-sm font-bold tracking-tight text-white">Booklet Builder</h1>
+                  {settings.documentYear && (
+                    <span className="rounded border border-indigo-500/30 bg-indigo-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-indigo-300">
+                      {settings.documentYear}
+                    </span>
+                  )}
+                </div>
+                <p className="text-[11px] text-slate-400">College Recognition CMS</p>
+              </div>
             </div>
 
-            <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center">
+            {/* Controls */}
+            <div className="flex flex-wrap items-center gap-2">
               {/* Document title */}
               <div className="relative">
-                <FileText className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-indigo-300/60" />
+                <FileText className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-slate-400" />
                 <input
                   value={documentTitle}
                   onChange={(event) => setDocumentTitle(event.target.value)}
-                  className="h-9 w-full rounded-lg border border-white/10 bg-white/5 pl-9 pr-3 text-sm text-white placeholder:text-indigo-300/40 backdrop-blur-sm transition-all duration-200 focus:border-indigo-400/40 focus:bg-white/10 focus:outline-none focus:ring-2 focus:ring-indigo-400/20 sm:w-64"
+                  className="h-8 w-48 rounded-lg border border-slate-700 bg-slate-800 pl-8 pr-3 text-xs text-white placeholder:text-slate-500 transition-colors focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500/40 sm:w-56"
                   placeholder="Document title"
                 />
               </div>
 
-              <div className="h-6 w-px bg-white/10 hidden sm:block" />
+              <div className="h-5 w-px bg-slate-700 hidden sm:block" />
 
-              {/* Actions */}
-              <div className="flex gap-2">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="text-indigo-200/80 hover:bg-white/10 hover:text-white"
-                  onClick={handleReset}
-                >
-                  <RefreshCw className="size-3.5" />
-                  Reset
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="text-indigo-200/80 hover:bg-white/10 hover:text-white"
-                  onClick={handleExportSvg}
-                >
-                  <FileImage className="size-3.5" />
-                  SVG
-                </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  className="bg-indigo-500 text-white shadow-md shadow-indigo-500/30 hover:bg-indigo-400"
-                  onClick={handleExportPdf}
-                  disabled={isExporting}
-                >
-                  <Download className="size-3.5" />
-                  {isExporting ? 'Exporting…' : 'Export PDF'}
-                </Button>
-              </div>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-8 border border-slate-700 bg-slate-800 px-3 text-xs text-slate-300 hover:bg-slate-700 hover:text-white"
+                onClick={handleReset}
+              >
+                <RefreshCw className="size-3.5" />
+                <span className="hidden sm:inline">Reset</span>
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-8 border border-slate-700 bg-slate-800 px-3 text-xs text-slate-300 hover:bg-slate-700 hover:text-white"
+                onClick={handleExportSvg}
+              >
+                <FileImage className="size-3.5" />
+                <span className="hidden sm:inline">SVG</span>
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                className="h-8 bg-indigo-600 px-3 text-xs text-white hover:bg-indigo-500"
+                onClick={handleExportPdf}
+                disabled={isExporting}
+              >
+                <Download className="size-3.5" />
+                {isExporting ? 'Exporting…' : 'Export PDF'}
+              </Button>
             </div>
           </div>
-
-          {/* Bottom accent bar */}
-          <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-indigo-400/50 to-transparent" />
         </header>
 
-        {/* ── Main grid ───────────────────────────────────── */}
-        <div className="grid min-h-0 flex-1 gap-4 xl:grid-cols-[300px_minmax(0,1fr)_360px]">
-          <PageList
-            pages={pages}
-            activePageId={activePage?.id ?? ''}
-            onSelect={setActivePageId}
-            onAdd={handleAddPage}
-            onDelete={handleDeletePage}
-            onReorder={handleReorder}
-          />
-
-          <CanvasPreview pages={pages} settings={settings} />
-
-          {/* ── Right panel ─────────────────────────────── */}
-          <Tabs defaultValue="editor" className="min-h-0">
-            <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="editor">Editor</TabsTrigger>
-              <TabsTrigger value="settings">Settings</TabsTrigger>
-            </TabsList>
-            <TabsContent value="editor" className="min-h-0">
-              <ScrollArea className="h-[calc(100vh-14rem)] xl:h-[calc(100vh-11.5rem)]">
-                {activePage ? <PageEditor page={activePage} onChange={handlePageChange} /> : null}
-              </ScrollArea>
-            </TabsContent>
-            <TabsContent value="settings" className="min-h-0">
-              <ScrollArea className="h-[calc(100vh-14rem)] xl:h-[calc(100vh-11.5rem)]">
-                <div className="space-y-3 pb-2">
-                  {/* Scale */}
-                  <SettingsGroup title="Scale">
-                    <SliderSetting
-                      label="Global scale"
-                      value={settings.globalScale}
-                      min={0.8} max={1.4} step={0.05}
-                      unit="×"
-                      onChange={(v) => updateSetting('globalScale', v)}
-                    />
-                  </SettingsGroup>
-
-                  {/* Typography */}
-                  <SettingsGroup title="Typography">
-                    <SliderSetting
-                      label="Title size"
-                      value={settings.titleSize}
-                      min={14} max={28} step={0.5}
-                      unit="px"
-                      onChange={(v) => updateSetting('titleSize', v)}
-                    />
-                    <SliderSetting
-                      label="Subtitle size"
-                      value={settings.subtitleSize}
-                      min={10} max={18} step={0.5}
-                      unit="px"
-                      onChange={(v) => updateSetting('subtitleSize', v)}
-                    />
-                    <SliderSetting
-                      label="Section heading"
-                      value={settings.headingSize}
-                      min={10} max={18} step={0.5}
-                      unit="px"
-                      onChange={(v) => updateSetting('headingSize', v)}
-                    />
-                    <SliderSetting
-                      label="Body size"
-                      value={settings.bodySize}
-                      min={9} max={16} step={0.25}
-                      unit="px"
-                      onChange={(v) => updateSetting('bodySize', v)}
-                    />
-                    <SliderSetting
-                      label="Meta size"
-                      value={settings.metaSize}
-                      min={8} max={14} step={0.25}
-                      unit="px"
-                      onChange={(v) => updateSetting('metaSize', v)}
-                    />
-                    <SliderSetting
-                      label="Page number size"
-                      value={settings.pageNumberSize}
-                      min={8} max={14} step={0.25}
-                      unit="px"
-                      onChange={(v) => updateSetting('pageNumberSize', v)}
-                    />
-                    <SliderSetting
-                      label="Line height"
-                      value={settings.lineHeight}
-                      min={1.1} max={1.8} step={0.05}
-                      unit="×"
-                      onChange={(v) => updateSetting('lineHeight', v)}
-                    />
-                  </SettingsGroup>
-
-                  {/* Layout */}
-                  <SettingsGroup title="Layout">
-                    <SliderSetting
-                      label="Top padding"
-                      value={settings.pagePaddingTop}
-                      min={24} max={72} step={1}
-                      unit="px"
-                      onChange={(v) => updateSetting('pagePaddingTop', v)}
-                    />
-                    <SliderSetting
-                      label="Bottom padding"
-                      value={settings.pagePaddingBottom}
-                      min={20} max={72} step={1}
-                      unit="px"
-                      onChange={(v) => updateSetting('pagePaddingBottom', v)}
-                    />
-                    <SliderSetting
-                      label="Side padding"
-                      value={settings.pagePaddingX}
-                      min={24} max={72} step={1}
-                      unit="px"
-                      onChange={(v) => updateSetting('pagePaddingX', v)}
-                    />
-                    <SliderSetting
-                      label="Column gap"
-                      value={settings.columnGap}
-                      min={16} max={48} step={1}
-                      unit="px"
-                      onChange={(v) => updateSetting('columnGap', v)}
-                    />
-                  </SettingsGroup>
-
-                  {/* Display */}
-                  <SettingsGroup title="Display">
-                    <label className="flex items-center justify-between gap-3 rounded-lg py-1 text-xs font-medium text-stone-600">
-                      Show page numbers
-                      <span className="toggle-switch">
-                        <input
-                          type="checkbox"
-                          checked={settings.showPageNumbers}
-                          onChange={(event) => updateSetting('showPageNumbers', event.target.checked)}
-                        />
-                        <span className="toggle-track" />
-                      </span>
-                    </label>
-                  </SettingsGroup>
-                </div>
-              </ScrollArea>
-            </TabsContent>
-          </Tabs>
+        {/* ── Mobile tab bar ──────────────────────────────── */}
+        <div className="flex rounded-lg border border-stone-200 bg-white p-1 shadow-sm xl:hidden">
+          {(
+            [
+              { key: 'pages', label: 'Pages', icon: LayoutGrid },
+              { key: 'canvas', label: 'Canvas', icon: BookOpen },
+              { key: 'editor', label: 'Editor', icon: Pencil },
+            ] as const
+          ).map(({ key, label, icon: Icon }) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => setMobileTab(key)}
+              className={`flex flex-1 items-center justify-center gap-1.5 rounded-md py-2 text-xs font-medium transition-colors ${
+                mobileTab === key
+                  ? 'bg-indigo-600 text-white shadow-sm'
+                  : 'text-stone-500 hover:bg-stone-100 hover:text-stone-700'
+              }`}
+            >
+              <Icon className="size-3.5" />
+              {label}
+            </button>
+          ))}
         </div>
+
+        {/* ── Main grid – desktop ──────────────────────────── */}
+        <div
+          className="hidden min-h-0 flex-1 gap-3 xl:flex"
+          style={{ minHeight: 'calc(100vh - 9rem)' }}
+        >
+          {/* Page list */}
+          <div className="w-[280px] flex-shrink-0">
+            <PageList
+              pages={pages}
+              activePageId={activePage?.id ?? ''}
+              onSelect={setActivePageId}
+              onAdd={handleAddPage}
+              onDelete={handleDeletePage}
+              onReorder={handleReorder}
+            />
+          </div>
+
+          {/* Canvas */}
+          <div className="min-w-0 flex-1">
+            <CanvasPreview pages={pages} settings={settings} />
+          </div>
+
+          {/* Resize handle */}
+          <div
+            className="flex w-2 flex-shrink-0 cursor-col-resize items-center justify-center rounded"
+            onMouseDown={handleDragMouseDown}
+            title="Drag to resize editor"
+          >
+            <GripVertical className="size-3.5 text-stone-300" />
+          </div>
+
+          {/* Editor / Settings */}
+          <div className="flex-shrink-0" style={{ width: editorWidth }}>
+            {EditorSettingsPanel}
+          </div>
+        </div>
+
+        {/* ── Main panels – mobile ────────────────────────── */}
+        <div className="min-h-0 flex-1 xl:hidden" style={{ minHeight: 'calc(100vh - 12rem)' }}>
+          <div className={mobileTab === 'pages' ? 'block h-full' : 'hidden'}>
+            <PageList
+              pages={pages}
+              activePageId={activePage?.id ?? ''}
+              onSelect={handleMobileSelect}
+              onAdd={handleMobileAdd}
+              onDelete={handleDeletePage}
+              onReorder={handleReorder}
+            />
+          </div>
+          <div className={mobileTab === 'canvas' ? 'block h-full' : 'hidden'}>
+            <CanvasPreview pages={pages} settings={settings} />
+          </div>
+          <div className={mobileTab === 'editor' ? 'block h-full' : 'hidden'}>
+            {EditorSettingsPanel}
+          </div>
+        </div>
+
       </div>
     </div>
   )
