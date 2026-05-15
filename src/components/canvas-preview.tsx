@@ -110,8 +110,8 @@ export function CanvasPreview({
       </div>
 
       {/* Canvas */}
-      <div className="min-h-0 flex-1">
-        <ScrollArea className="h-full rounded-b-xl">
+      <div className="min-h-0 flex-1 border-b border-stone-100">
+        <ScrollArea className="h-full">
           <div className="canvas-pattern flex min-h-full items-start justify-center px-6 py-8">
             {currentPage ? (
               <div className={cn('animate-fade-in flex flex-col items-center gap-3')}>
@@ -140,41 +140,43 @@ export function CanvasPreview({
                     </div>
                   ))}
                 </div>
-
-                {/* Page navigation footer */}
-                <div className="flex items-center gap-3">
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="h-7 gap-1 px-2 text-[11px] text-stone-500 disabled:opacity-30"
-                    disabled={safeIdx === 0}
-                    onClick={goToPrev}
-                  >
-                    <ChevronLeft className="size-3" />
-                    Prev
-                  </Button>
-                  <span className="text-[10px] font-medium tabular-nums text-stone-400">
-                    Page {safeIdx + 1} of {pageCount}
-                  </span>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="h-7 gap-1 px-2 text-[11px] text-stone-500 disabled:opacity-30"
-                    disabled={safeIdx >= pageCount - 1}
-                    onClick={goToNext}
-                  >
-                    Next
-                    <ChevronRight className="size-3" />
-                  </Button>
-                </div>
               </div>
             ) : (
               <p className="mt-12 text-sm text-stone-400">No pages to preview.</p>
             )}
           </div>
         </ScrollArea>
+      </div>
+
+      {/* Footer */}
+      <div className="flex items-center justify-between gap-3 px-4 py-2.5 bg-stone-50 rounded-b-xl">
+        <div className="text-xs font-medium text-stone-500">
+          Page {pageCount > 0 ? safeIdx + 1 : 0} of {pageCount}
+        </div>
+        <div className="flex items-center gap-1">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-7 px-3 text-xs text-stone-600 hover:text-stone-900"
+            disabled={safeIdx === 0 || pageCount === 0}
+            onClick={goToPrev}
+          >
+            <ChevronLeft className="mr-1 size-3.5" />
+            Previous
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-7 px-3 text-xs text-stone-600 hover:text-stone-900"
+            disabled={safeIdx >= pageCount - 1 || pageCount === 0}
+            onClick={goToNext}
+          >
+            Next
+            <ChevronRight className="ml-1 size-3.5" />
+          </Button>
+        </div>
       </div>
     </div>
   )
