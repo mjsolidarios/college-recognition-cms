@@ -1,9 +1,31 @@
 @import "tailwindcss";
 
+/* ── Design tokens ───────────────────────────────────────── */
 :root {
-  color: #111827;
-  background-color: #f5f5f4;
-  font-family: Inter, system-ui, sans-serif;
+  /* Indigo primary palette */
+  --color-primary-50: 238 242 255;
+  --color-primary-100: 224 231 255;
+  --color-primary-200: 199 210 254;
+  --color-primary-400: 129 140 248;
+  --color-primary-500: 99 102 241;
+  --color-primary-600: 79 70 229;
+  --color-primary-700: 67 56 202;
+
+  /* Semantic surfaces */
+  --surface-page: #ffffff;
+  --surface-canvas: #f1f0ee;
+  --surface-app: #f7f7f5;
+  --surface-raised: #ffffff;
+
+  /* Type color tokens */
+  --type-core: 99 102 241;       /* indigo */
+  --type-program: 217 119 6;     /* amber */
+  --type-academic: 5 150 105;    /* emerald */
+  --type-non-academic: 225 29 72; /* rose */
+
+  color: #1c1917;
+  background-color: var(--surface-app);
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
@@ -27,7 +49,8 @@ body {
 
 button,
 input,
-textarea {
+textarea,
+select {
   font: inherit;
 }
 
@@ -36,4 +59,164 @@ img,
 svg {
   display: block;
   max-width: 100%;
+}
+
+/* ── Custom range slider ─────────────────────────────────── */
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 6px;
+  border-radius: 999px;
+  background: linear-gradient(to right, rgb(var(--color-primary-200)), rgb(var(--color-primary-100)));
+  outline: none;
+  transition: background 200ms ease;
+}
+
+input[type="range"]:hover {
+  background: linear-gradient(to right, rgb(var(--color-primary-400)), rgb(var(--color-primary-200)));
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: rgb(var(--color-primary-500));
+  border: 3px solid white;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.18), 0 0 0 0px rgb(var(--color-primary-400) / 0);
+  cursor: pointer;
+  transition: box-shadow 200ms ease, transform 150ms ease;
+}
+
+input[type="range"]::-webkit-slider-thumb:hover {
+  transform: scale(1.15);
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.22), 0 0 0 4px rgb(var(--color-primary-400) / 0.15);
+}
+
+input[type="range"]::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: rgb(var(--color-primary-500));
+  border: 3px solid white;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.18);
+  cursor: pointer;
+  transition: box-shadow 200ms ease, transform 150ms ease;
+}
+
+input[type="range"]::-moz-range-thumb:hover {
+  transform: scale(1.15);
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.22), 0 0 0 4px rgb(var(--color-primary-400) / 0.15);
+}
+
+/* ── Keyframe animations ─────────────────────────────────── */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes scaleIn {
+  from { opacity: 0; transform: scale(0.96); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.animate-fade-in {
+  animation: fadeIn 300ms ease-out both;
+}
+
+.animate-slide-up {
+  animation: slideUp 350ms ease-out both;
+}
+
+.animate-scale-in {
+  animation: scaleIn 250ms ease-out both;
+}
+
+/* ── Canvas dot pattern ──────────────────────────────────── */
+.canvas-pattern {
+  background-color: var(--surface-canvas);
+  background-image:
+    radial-gradient(circle, #c8c5be 0.8px, transparent 0.8px);
+  background-size: 20px 20px;
+}
+
+/* ── Toggle switch ───────────────────────────────────────── */
+.toggle-switch {
+  position: relative;
+  display: inline-flex;
+  width: 44px;
+  height: 24px;
+  flex-shrink: 0;
+}
+
+.toggle-switch input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+  z-index: 1;
+  margin: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.toggle-track {
+  width: 100%;
+  height: 100%;
+  border-radius: 999px;
+  background: #d6d3d1;
+  transition: background 200ms ease;
+  position: relative;
+}
+
+.toggle-track::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: white;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+  transition: transform 200ms ease;
+}
+
+.toggle-switch input:checked + .toggle-track {
+  background: rgb(var(--color-primary-500));
+}
+
+.toggle-switch input:checked + .toggle-track::after {
+  transform: translateX(20px);
+}
+
+.toggle-switch input:focus-visible + .toggle-track {
+  outline: 2px solid rgb(var(--color-primary-400));
+  outline-offset: 2px;
+}
+
+/* ── Scrollbar refinements ───────────────────────────────── */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #c8c5be;
+  border-radius: 999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #a8a29e;
 }

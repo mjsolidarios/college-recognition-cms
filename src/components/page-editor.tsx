@@ -1,7 +1,7 @@
-import { Plus, Trash2 } from 'lucide-react'
+import { ChevronDown, Plus, Trash2 } from 'lucide-react'
+import { useState } from 'react'
 
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import {
   Select,
@@ -11,6 +11,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
+import { cn } from '@/lib/utils'
 import type {
   AcademicEntry,
   AcademicPage,
@@ -23,12 +24,75 @@ import type {
   ProgramRow,
 } from '@/types/cms'
 
-function SectionLabel({ children }: { children: string }) {
-  return <label className="text-xs font-semibold uppercase tracking-[0.18em] text-stone-500">{children}</label>
+const TYPE_COLORS: Record<string, string> = {
+  core: 'from-indigo-500 to-indigo-600',
+  program: 'from-amber-500 to-amber-600',
+  academic: 'from-emerald-500 to-emerald-600',
+  'non-academic': 'from-rose-500 to-rose-600',
 }
 
-function ItemCard({ children }: { children: React.ReactNode }) {
-  return <div className="space-y-3 rounded-lg border border-stone-200 p-3">{children}</div>
+function SectionLabel({ children }: { children: string }) {
+  return <label className="text-[11px] font-semibold uppercase tracking-[0.14em] text-stone-400">{children}</label>
+}
+
+function CollapsibleItemCard({
+  children,
+  title,
+  index,
+  onDelete,
+}: {
+  children: React.ReactNode
+  title: string
+  index: number
+  onDelete: () => void
+}) {
+  const [isOpen, setIsOpen] = useState(true)
+
+  return (
+    <div className="animate-slide-up rounded-lg border border-stone-200/80 bg-stone-50/50 transition-colors hover:border-stone-300/60">
+      <button
+        type="button"
+        className="flex w-full items-center gap-2 px-3 py-2.5 text-left cursor-pointer"
+        onClick={() => setIsOpen(!isOpen)}
+      >
+        <span className="flex size-5 items-center justify-center rounded bg-stone-200/80 text-[10px] font-bold tabular-nums text-stone-500">
+          {index}
+        </span>
+        <span className="flex-1 truncate text-xs font-semibold text-stone-700">{title}</span>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="size-6 text-stone-400 hover:text-red-500"
+          onClick={(event) => {
+            event.stopPropagation()
+            onDelete()
+          }}
+        >
+          <Trash2 className="size-3" />
+        </Button>
+        <ChevronDown className={cn('size-3.5 text-stone-400 transition-transform duration-200', isOpen && 'rotate-180')} />
+      </button>
+      {isOpen && (
+        <div className="animate-fade-in space-y-3 border-t border-stone-200/60 px-3 pb-3 pt-3">
+          {children}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function AddButton({ children, onClick }: { children: React.ReactNode; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-stone-300 px-3 py-2.5 text-xs font-medium text-stone-500 transition-all duration-200 hover:border-indigo-300 hover:bg-indigo-50/50 hover:text-indigo-600 cursor-pointer"
+    >
+      <Plus className="size-3.5" />
+      {children}
+    </button>
+  )
 }
 
 function updateItem<T extends { id: string }>(items: T[], itemId: string, updater: (item: T) => T) {
@@ -37,18 +101,22 @@ function updateItem<T extends { id: string }>(items: T[], itemId: string, update
 
 function EditorChrome({ page, children }: { page: CmsPage; children: React.ReactNode }) {
   return (
-    <Card className="flex h-full flex-col">
-      <CardHeader>
-        <CardTitle>Editor</CardTitle>
-        <CardDescription>Update content and structure for the selected page.</CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="grid gap-4 md:grid-cols-2">
-          <div className="space-y-2 md:col-span-2">
+    <div className="flex h-full flex-col rounded-xl border border-stone-200/80 bg-white shadow-sm">
+      {/* Type color bar */}
+      <div className={cn('h-1 rounded-t-xl bg-gradient-to-r', TYPE_COLORS[page.type])} />
+
+      <div className="flex flex-col gap-1 p-4 pb-2">
+        <h3 className="text-sm font-semibold text-stone-900">Editor</h3>
+        <p className="text-xs text-stone-400">Update content and structure for the selected page.</p>
+      </div>
+
+      <div className="space-y-4 p-4 pt-2">
+        <div className="grid gap-3 md:grid-cols-2">
+          <div className="space-y-1.5 md:col-span-2">
             <SectionLabel>Page title</SectionLabel>
-            <Input value={page.title} readOnly />
+            <Input value={page.title} readOnly className="bg-stone-50 text-stone-500" />
           </div>
-          <div className="space-y-2">
+          <div className="space-y-1.5">
             <SectionLabel>Page type</SectionLabel>
             <Select value={page.type} onValueChange={() => undefined}>
               <SelectTrigger>
@@ -59,14 +127,14 @@ function EditorChrome({ page, children }: { page: CmsPage; children: React.React
               </SelectContent>
             </Select>
           </div>
-          <div className="space-y-2">
+          <div className="space-y-1.5">
             <SectionLabel>Order</SectionLabel>
-            <Input value={String(page.order + 1)} readOnly />
+            <Input value={String(page.order + 1)} readOnly className="bg-stone-50 text-stone-500" />
           </div>
         </div>
         {children}
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   )
 }
 
@@ -83,62 +151,61 @@ function ProgramEditor({ page, onChange }: { page: ProgramPage; onChange: (page:
 
   return (
     <EditorChrome page={page}>
-      <div className="space-y-4">
-        <div className="space-y-2">
+      <div className="space-y-3">
+        <div className="space-y-1.5">
           <SectionLabel>Page title</SectionLabel>
           <Input value={page.title} onChange={(event) => onChange({ ...page, title: event.target.value })} />
         </div>
-        <div className="space-y-2">
-          <SectionLabel>Heading</SectionLabel>
+        <div className="space-y-1.5">
+          <div className="flex items-center justify-between">
+            <SectionLabel>Heading</SectionLabel>
+          </div>
           <Input value={page.content.heading} onChange={(event) => onChange({ ...page, content: { ...page.content, heading: event.target.value } })} />
         </div>
-        <div className="space-y-3">
-          {page.content.rows.map((row) => (
-            <ItemCard key={row.id}>
-              <div className="flex items-center justify-between gap-3">
-                <span className="text-sm font-semibold text-stone-900">Program row</span>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="size-8"
-                  onClick={() =>
-                    onChange({
-                      ...page,
-                      content: {
-                        ...page.content,
-                        rows: page.content.rows.filter((item) => item.id !== row.id),
-                      },
-                    })
-                  }
-                >
-                  <Trash2 className="size-4" />
-                </Button>
-              </div>
+
+        <div className="flex items-center gap-2 pt-1">
+          <span className="text-xs font-semibold text-stone-500">{page.content.rows.length} row{page.content.rows.length !== 1 ? 's' : ''}</span>
+          <div className="h-px flex-1 bg-stone-200" />
+        </div>
+
+        <div className="space-y-2">
+          {page.content.rows.map((row, index) => (
+            <CollapsibleItemCard
+              key={row.id}
+              title={row.leftTitle || 'Untitled row'}
+              index={index + 1}
+              onDelete={() =>
+                onChange({
+                  ...page,
+                  content: {
+                    ...page.content,
+                    rows: page.content.rows.filter((item) => item.id !== row.id),
+                  },
+                })
+              }
+            >
               <div className="grid gap-3 md:grid-cols-2">
-                <div className="space-y-2">
+                <div className="space-y-1.5">
                   <SectionLabel>Left title</SectionLabel>
                   <Input value={row.leftTitle} onChange={(event) => updateRow(row.id, (current) => ({ ...current, leftTitle: event.target.value }))} />
                 </div>
-                <div className="space-y-2">
+                <div className="space-y-1.5">
                   <SectionLabel>Right title</SectionLabel>
                   <Input value={row.rightTitle ?? ''} onChange={(event) => updateRow(row.id, (current) => ({ ...current, rightTitle: event.target.value }))} />
                 </div>
-                <div className="space-y-2">
+                <div className="space-y-1.5">
                   <SectionLabel>Left body</SectionLabel>
                   <Textarea value={row.leftBody} onChange={(event) => updateRow(row.id, (current) => ({ ...current, leftBody: event.target.value }))} />
                 </div>
-                <div className="space-y-2">
+                <div className="space-y-1.5">
                   <SectionLabel>Right body</SectionLabel>
                   <Textarea value={row.rightBody ?? ''} onChange={(event) => updateRow(row.id, (current) => ({ ...current, rightBody: event.target.value }))} />
                 </div>
               </div>
-            </ItemCard>
+            </CollapsibleItemCard>
           ))}
         </div>
-        <Button
-          type="button"
-          variant="outline"
+        <AddButton
           onClick={() =>
             onChange({
               ...page,
@@ -158,9 +225,8 @@ function ProgramEditor({ page, onChange }: { page: ProgramPage; onChange: (page:
             })
           }
         >
-          <Plus className="size-4" />
           Add row
-        </Button>
+        </AddButton>
       </div>
     </EditorChrome>
   )
@@ -179,57 +245,56 @@ function AcademicEditor({ page, onChange }: { page: AcademicPage; onChange: (pag
 
   return (
     <EditorChrome page={page}>
-      <div className="space-y-4">
-        <div className="space-y-2">
+      <div className="space-y-3">
+        <div className="space-y-1.5">
           <SectionLabel>Page title</SectionLabel>
           <Input value={page.title} onChange={(event) => onChange({ ...page, title: event.target.value })} />
         </div>
-        <div className="space-y-2">
+        <div className="space-y-1.5">
           <SectionLabel>Heading</SectionLabel>
           <Input value={page.content.heading} onChange={(event) => onChange({ ...page, content: { ...page.content, heading: event.target.value } })} />
         </div>
-        {page.content.entries.map((entry) => (
-          <ItemCard key={entry.id}>
-            <div className="flex items-center justify-between gap-3">
-              <span className="text-sm font-semibold text-stone-900">Awardee</span>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className="size-8"
-                onClick={() =>
-                  onChange({
-                    ...page,
-                    content: { ...page.content, entries: page.content.entries.filter((item) => item.id !== entry.id) },
-                  })
-                }
-              >
-                <Trash2 className="size-4" />
-              </Button>
-            </div>
-            <div className="grid gap-3 md:grid-cols-2">
-              <div className="space-y-2">
-                <SectionLabel>Name</SectionLabel>
-                <Input value={entry.name} onChange={(event) => updateEntry(entry.id, (current) => ({ ...current, name: event.target.value }))} />
+
+        <div className="flex items-center gap-2 pt-1">
+          <span className="text-xs font-semibold text-stone-500">{page.content.entries.length} awardee{page.content.entries.length !== 1 ? 's' : ''}</span>
+          <div className="h-px flex-1 bg-stone-200" />
+        </div>
+
+        <div className="space-y-2">
+          {page.content.entries.map((entry, index) => (
+            <CollapsibleItemCard
+              key={entry.id}
+              title={entry.name || 'Untitled'}
+              index={index + 1}
+              onDelete={() =>
+                onChange({
+                  ...page,
+                  content: { ...page.content, entries: page.content.entries.filter((item) => item.id !== entry.id) },
+                })
+              }
+            >
+              <div className="grid gap-3 md:grid-cols-2">
+                <div className="space-y-1.5">
+                  <SectionLabel>Name</SectionLabel>
+                  <Input value={entry.name} onChange={(event) => updateEntry(entry.id, (current) => ({ ...current, name: event.target.value }))} />
+                </div>
+                <div className="space-y-1.5">
+                  <SectionLabel>Award / Program</SectionLabel>
+                  <Input value={entry.award} onChange={(event) => updateEntry(entry.id, (current) => ({ ...current, award: event.target.value }))} />
+                </div>
+                <div className="space-y-1.5">
+                  <SectionLabel>Category</SectionLabel>
+                  <Input value={entry.category} onChange={(event) => updateEntry(entry.id, (current) => ({ ...current, category: event.target.value }))} />
+                </div>
+                <div className="space-y-1.5">
+                  <SectionLabel>Grade level</SectionLabel>
+                  <Input value={entry.gradeLevel} onChange={(event) => updateEntry(entry.id, (current) => ({ ...current, gradeLevel: event.target.value }))} />
+                </div>
               </div>
-              <div className="space-y-2">
-                <SectionLabel>Award / Program</SectionLabel>
-                <Input value={entry.award} onChange={(event) => updateEntry(entry.id, (current) => ({ ...current, award: event.target.value }))} />
-              </div>
-              <div className="space-y-2">
-                <SectionLabel>Category</SectionLabel>
-                <Input value={entry.category} onChange={(event) => updateEntry(entry.id, (current) => ({ ...current, category: event.target.value }))} />
-              </div>
-              <div className="space-y-2">
-                <SectionLabel>Grade level</SectionLabel>
-                <Input value={entry.gradeLevel} onChange={(event) => updateEntry(entry.id, (current) => ({ ...current, gradeLevel: event.target.value }))} />
-              </div>
-            </div>
-          </ItemCard>
-        ))}
-        <Button
-          type="button"
-          variant="outline"
+            </CollapsibleItemCard>
+          ))}
+        </div>
+        <AddButton
           onClick={() =>
             onChange({
               ...page,
@@ -249,9 +314,8 @@ function AcademicEditor({ page, onChange }: { page: AcademicPage; onChange: (pag
             })
           }
         >
-          <Plus className="size-4" />
           Add awardee
-        </Button>
+        </AddButton>
       </div>
     </EditorChrome>
   )
@@ -270,53 +334,52 @@ function NonAcademicEditor({ page, onChange }: { page: NonAcademicPage; onChange
 
   return (
     <EditorChrome page={page}>
-      <div className="space-y-4">
-        <div className="space-y-2">
+      <div className="space-y-3">
+        <div className="space-y-1.5">
           <SectionLabel>Page title</SectionLabel>
           <Input value={page.title} onChange={(event) => onChange({ ...page, title: event.target.value })} />
         </div>
-        <div className="space-y-2">
+        <div className="space-y-1.5">
           <SectionLabel>Heading</SectionLabel>
           <Input value={page.content.heading} onChange={(event) => onChange({ ...page, content: { ...page.content, heading: event.target.value } })} />
         </div>
-        {page.content.entries.map((entry) => (
-          <ItemCard key={entry.id}>
-            <div className="flex items-center justify-between gap-3">
-              <span className="text-sm font-semibold text-stone-900">Award</span>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className="size-8"
-                onClick={() =>
-                  onChange({
-                    ...page,
-                    content: { ...page.content, entries: page.content.entries.filter((item) => item.id !== entry.id) },
-                  })
-                }
-              >
-                <Trash2 className="size-4" />
-              </Button>
-            </div>
-            <div className="grid gap-3 md:grid-cols-2">
-              <div className="space-y-2">
-                <SectionLabel>Name</SectionLabel>
-                <Input value={entry.name} onChange={(event) => updateEntry(entry.id, (current) => ({ ...current, name: event.target.value }))} />
+
+        <div className="flex items-center gap-2 pt-1">
+          <span className="text-xs font-semibold text-stone-500">{page.content.entries.length} award{page.content.entries.length !== 1 ? 's' : ''}</span>
+          <div className="h-px flex-1 bg-stone-200" />
+        </div>
+
+        <div className="space-y-2">
+          {page.content.entries.map((entry, index) => (
+            <CollapsibleItemCard
+              key={entry.id}
+              title={entry.name || 'Untitled'}
+              index={index + 1}
+              onDelete={() =>
+                onChange({
+                  ...page,
+                  content: { ...page.content, entries: page.content.entries.filter((item) => item.id !== entry.id) },
+                })
+              }
+            >
+              <div className="grid gap-3 md:grid-cols-2">
+                <div className="space-y-1.5">
+                  <SectionLabel>Name</SectionLabel>
+                  <Input value={entry.name} onChange={(event) => updateEntry(entry.id, (current) => ({ ...current, name: event.target.value }))} />
+                </div>
+                <div className="space-y-1.5">
+                  <SectionLabel>Award</SectionLabel>
+                  <Input value={entry.award} onChange={(event) => updateEntry(entry.id, (current) => ({ ...current, award: event.target.value }))} />
+                </div>
+                <div className="space-y-1.5 md:col-span-2">
+                  <SectionLabel>Category</SectionLabel>
+                  <Input value={entry.category} onChange={(event) => updateEntry(entry.id, (current) => ({ ...current, category: event.target.value }))} />
+                </div>
               </div>
-              <div className="space-y-2">
-                <SectionLabel>Award</SectionLabel>
-                <Input value={entry.award} onChange={(event) => updateEntry(entry.id, (current) => ({ ...current, award: event.target.value }))} />
-              </div>
-              <div className="space-y-2 md:col-span-2">
-                <SectionLabel>Category</SectionLabel>
-                <Input value={entry.category} onChange={(event) => updateEntry(entry.id, (current) => ({ ...current, category: event.target.value }))} />
-              </div>
-            </div>
-          </ItemCard>
-        ))}
-        <Button
-          type="button"
-          variant="outline"
+            </CollapsibleItemCard>
+          ))}
+        </div>
+        <AddButton
           onClick={() =>
             onChange({
               ...page,
@@ -335,9 +398,8 @@ function NonAcademicEditor({ page, onChange }: { page: NonAcademicPage; onChange
             })
           }
         >
-          <Plus className="size-4" />
           Add award
-        </Button>
+        </AddButton>
       </div>
     </EditorChrome>
   )
@@ -356,56 +418,55 @@ function CoreEditor({ page, onChange }: { page: CorePage; onChange: (page: CmsPa
 
   return (
     <EditorChrome page={page}>
-      <div className="space-y-4">
-        <div className="space-y-2">
+      <div className="space-y-3">
+        <div className="space-y-1.5">
           <SectionLabel>Page title</SectionLabel>
           <Input value={page.title} onChange={(event) => onChange({ ...page, title: event.target.value })} />
         </div>
-        <div className="space-y-2">
+        <div className="space-y-1.5">
           <SectionLabel>Heading</SectionLabel>
           <Textarea value={page.content.heading} onChange={(event) => onChange({ ...page, content: { ...page.content, heading: event.target.value } })} />
         </div>
-        <div className="space-y-2">
+        <div className="space-y-1.5">
           <SectionLabel>Subheading</SectionLabel>
           <Input value={page.content.subheading ?? ''} onChange={(event) => onChange({ ...page, content: { ...page.content, subheading: event.target.value } })} />
         </div>
-        {page.content.sections.map((section) => (
-          <ItemCard key={section.id}>
-            <div className="flex items-center justify-between gap-3">
-              <span className="text-sm font-semibold text-stone-900">Section</span>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className="size-8"
-                onClick={() =>
-                  onChange({
-                    ...page,
-                    content: {
-                      ...page.content,
-                      sections: page.content.sections.filter((item) => item.id !== section.id),
-                    },
-                  })
-                }
-              >
-                <Trash2 className="size-4" />
-              </Button>
-            </div>
-            <div className="space-y-3">
-              <div className="space-y-2">
-                <SectionLabel>Title</SectionLabel>
-                <Input value={section.title} onChange={(event) => updateSection(section.id, (current) => ({ ...current, title: event.target.value }))} />
+
+        <div className="flex items-center gap-2 pt-1">
+          <span className="text-xs font-semibold text-stone-500">{page.content.sections.length} section{page.content.sections.length !== 1 ? 's' : ''}</span>
+          <div className="h-px flex-1 bg-stone-200" />
+        </div>
+
+        <div className="space-y-2">
+          {page.content.sections.map((section, index) => (
+            <CollapsibleItemCard
+              key={section.id}
+              title={section.title || 'Untitled'}
+              index={index + 1}
+              onDelete={() =>
+                onChange({
+                  ...page,
+                  content: {
+                    ...page.content,
+                    sections: page.content.sections.filter((item) => item.id !== section.id),
+                  },
+                })
+              }
+            >
+              <div className="space-y-3">
+                <div className="space-y-1.5">
+                  <SectionLabel>Title</SectionLabel>
+                  <Input value={section.title} onChange={(event) => updateSection(section.id, (current) => ({ ...current, title: event.target.value }))} />
+                </div>
+                <div className="space-y-1.5">
+                  <SectionLabel>Body</SectionLabel>
+                  <Textarea value={section.body} onChange={(event) => updateSection(section.id, (current) => ({ ...current, body: event.target.value }))} />
+                </div>
               </div>
-              <div className="space-y-2">
-                <SectionLabel>Body</SectionLabel>
-                <Textarea value={section.body} onChange={(event) => updateSection(section.id, (current) => ({ ...current, body: event.target.value }))} />
-              </div>
-            </div>
-          </ItemCard>
-        ))}
-        <Button
-          type="button"
-          variant="outline"
+            </CollapsibleItemCard>
+          ))}
+        </div>
+        <AddButton
           onClick={() =>
             onChange({
               ...page,
@@ -419,9 +480,8 @@ function CoreEditor({ page, onChange }: { page: CorePage; onChange: (page: CmsPa
             })
           }
         >
-          <Plus className="size-4" />
           Add section
-        </Button>
+        </AddButton>
       </div>
     </EditorChrome>
   )
