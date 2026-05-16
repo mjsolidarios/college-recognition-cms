@@ -2,6 +2,7 @@ import type {
   AcademicEntry,
   CmsPage,
   CmsSettings,
+  CorePage,
   CoreSection,
   FontPreset,
   NonAcademicEntry,
@@ -11,7 +12,7 @@ import type {
 } from '@/types/cms'
 import { PAGE_HEIGHT, PAGE_WIDTH } from '@/types/cms'
 import { getFontStack } from '@/lib/fonts'
-import { isValidFlowPosition } from '@/lib/flow-position'
+import { isValidFlowPosition, snapFlowPosition } from '@/lib/flow-position'
 
 /** Space between title block and first body column (tighter to match print brochure). */
 const TITLE_GAP = 16
@@ -1034,6 +1035,71 @@ function appendPageNumbers(renderedPages: RenderedPage[], settings: CmsSettings)
       blocks: [...page.blocks, pageNumberBlock],
     }
   })
+}
+
+/** Minimum flow gap between packed core sections (matches SECTION_GAP). */
+const FLOW_PACK_GAP = SECTION_GAP
+
+function flowAtLayoutContext(context: LayoutContext, column: 0 | 1): number {
+  const columnHeight = Math.max(1, context.maxContentY - context.contentTop)
+  const pageSpan = columnHeight * 2
+  const yInColumn = Math.max(0, context.currentY[column] - context.contentTop)
+  const withinPage = (column === 1 ? columnHeight : 0) + yInColumn
+  return context.currentPageIndex * pageSpan + withinPage
+}
+
+function measureCoreSectionFlowSpan(page: CorePage, settings: CmsSettings, section: CoreSection): number {
+  const context = createLayoutContext(page, settings, 1)
+  setContextToFlowPosition(context, 0)
+  const start = Math.min(flowAtLayoutContext(context, 0), flowAtLayoutContext(context, 1))
+  renderCoreSection(context, section, `measure-${section.id}`)
+  const end = Math.max(flowAtLayoutContext(context, 0), flowAtLayoutContext(context, 1))
+  return Math.max(FLOW_PACK_GAP, end - start)
+}
+
+function computeImplicitCoreSectionFlows(page: CorePage, settings: CmsSettings): Map<string, number> {
+  const context = createLayoutContext(page, settings, 1)
+  const flows = new Map<string, number>()
+  page.content.sections.forEach((section, index) => {
+    flows.set(section.id, flowAtLayoutContext(context, context.currentColumn))
+    renderCoreSection(context, section, `implicit-${index}`)
+  })
+  return flows
+}
+
+/** Pack core sections in flow order so none overlap; pushed sections shift down automatically. */
+export function resolveCoreSectionFlowPositions(
+  page: CorePage,
+  settings: CmsSettings,
+  overrides: Record<string, number> = {},
+): Map<string, number> {
+  const implicit = computeImplicitCoreSectionFlows(page, settings)
+  const spanById = new Map(
+    page.content.sections.map((section) => [section.id, measureCoreSectionFlowSpan(page, settings, section)]),
+  )
+
+  const entries = page.content.sections.map((section, index) => {
+    const desired =
+      overrides[section.id] ??
+      (isValidFlowPosition(section.flowPosition) ? section.flowPosition : implicit.get(section.id) ?? 0)
+    return {
+      section,
+      index,
+      desired: snapFlowPosition(desired),
+      span: spanById.get(section.id) ?? FLOW_PACK_GAP,
+    }
+  })
+
+  entries.sort((left, right) => left.desired - right.desired || left.index - right.index)
+
+  const resolved = new Map<string, number>()
+  let cursor = 0
+  for (const entry of entries) {
+    const start = snapFlowPosition(Math.max(entry.desired, cursor))
+    resolved.set(entry.section.id, start)
+    cursor = start + entry.span + FLOW_PACK_GAP
+  }
+  return resolved
 }
 
 export function renderDocument(pages: CmsPage[], settings: CmsSettings) {

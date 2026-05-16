@@ -25,12 +25,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { FONT_OPTIONS } from '@/lib/fonts'
 import { exportPdfDocument, exportSvgDocument, warmPdfExportWorker } from '@/lib/exporters'
 import {
-  flowPositionsEqual,
-  getCoreSectionFlowPosition,
-  setCoreSectionFlowPosition,
-  type SectionFlowCommand,
+  applyCoreSectionFlowMap,
+  repositionCoreSectionWithReflow,
+  type SectionFlowReflowCommand,
 } from '@/lib/core-section-flow'
-import { snapFlowPosition } from '@/lib/flow-position'
 import { previewSlotIndexForCoreSection, previewSlotIndexForPageId } from '@/lib/preview-navigation'
 import { renderDocument } from '@/lib/layout'
 import { defaultSettings, seedPages } from '@/lib/sample-data'
@@ -235,8 +233,8 @@ function App() {
 
   const [previewPageIndex, setPreviewPageIndex] = useState(0)
   const [coverUploadError, setCoverUploadError] = useState<string | null>(null)
-  const [sectionFlowUndo, setSectionFlowUndo] = useState<SectionFlowCommand[]>([])
-  const [sectionFlowRedo, setSectionFlowRedo] = useState<SectionFlowCommand[]>([])
+  const [sectionFlowUndo, setSectionFlowUndo] = useState<SectionFlowReflowCommand[]>([])
+  const [sectionFlowRedo, setSectionFlowRedo] = useState<SectionFlowReflowCommand[]>([])
   const [focusedCoreSectionId, setFocusedCoreSectionId] = useState<string | null>(null)
   const pagesRef = useRef(pages)
   pagesRef.current = pages
@@ -295,14 +293,22 @@ function App() {
   }, [])
 
   const handleCoreSectionReposition = (pageId: string, sectionId: string, flowPosition: number) => {
-    const from = getCoreSectionFlowPosition(pagesRef.current, pageId, sectionId)
-    const to = snapFlowPosition(flowPosition)
-    if (flowPositionsEqual(from, to)) {
+    const result = repositionCoreSectionWithReflow(
+      pagesRef.current,
+      pageId,
+      sectionId,
+      flowPosition,
+      settings,
+    )
+    if (!result) {
       return
     }
-    setSectionFlowUndo((stack) => [...stack, { pageId, sectionId, from, to }])
+    setSectionFlowUndo((stack) => [
+      ...stack,
+      { pageId, movedSectionId: sectionId, before: result.before, after: result.after },
+    ])
     setSectionFlowRedo([])
-    persistPages(setCoreSectionFlowPosition(pagesRef.current, pageId, sectionId, to))
+    persistPages(result.pages)
   }
 
   const handleUndoSectionFlow = useCallback(() => {
@@ -312,7 +318,7 @@ function App() {
       }
       const cmd = stack[stack.length - 1]!
       setSectionFlowRedo((redo) => [...redo, cmd])
-      persistPages(setCoreSectionFlowPosition(pagesRef.current, cmd.pageId, cmd.sectionId, cmd.from))
+      persistPages(applyCoreSectionFlowMap(pagesRef.current, cmd.pageId, cmd.before))
       return stack.slice(0, -1)
     })
   }, [])
@@ -324,7 +330,7 @@ function App() {
       }
       const cmd = stack[stack.length - 1]!
       setSectionFlowUndo((undo) => [...undo, cmd])
-      persistPages(setCoreSectionFlowPosition(pagesRef.current, cmd.pageId, cmd.sectionId, cmd.to))
+      persistPages(applyCoreSectionFlowMap(pagesRef.current, cmd.pageId, cmd.after))
       return stack.slice(0, -1)
     })
   }, [])
@@ -995,7 +1001,6 @@ function App() {
                 backCover={backCover}
                 onCoreSectionReposition={handleCoreSectionReposition}
                 focusedCoreSection={focusedCoreSection}
-                onCoreSectionFocus={handleCoreSectionFocus}
                 onUndoSectionFlow={handleUndoSectionFlow}
                 onRedoSectionFlow={handleRedoSectionFlow}
                 canUndoSectionFlow={sectionFlowUndo.length > 0}
@@ -1038,7 +1043,6 @@ function App() {
                 backCover={backCover}
                 onCoreSectionReposition={handleCoreSectionReposition}
                 focusedCoreSection={focusedCoreSection}
-                onCoreSectionFocus={handleCoreSectionFocus}
                 onUndoSectionFlow={handleUndoSectionFlow}
                 onRedoSectionFlow={handleRedoSectionFlow}
                 canUndoSectionFlow={sectionFlowUndo.length > 0}

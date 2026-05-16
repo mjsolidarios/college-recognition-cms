@@ -51,20 +51,6 @@ function placementFromFlow(flowPosition: number, contentTop: number, maxContentY
   return { localPageIndex, column, y }
 }
 
-function isSectionHighlighted(
-  sectionDrag: { pageId: string; sectionId: string } | null,
-  focusedCoreSection: { pageId: string; sectionId: string } | null | undefined,
-  sectionId: string,
-  sourcePageId: string,
-) {
-  if (sectionDrag?.sectionId === sectionId && sectionDrag.pageId === sourcePageId) {
-    return true
-  }
-  return (
-    focusedCoreSection?.sectionId === sectionId && focusedCoreSection.pageId === sourcePageId
-  )
-}
-
 function HorizontalRuler({ zoom, panX, maxVal }: { zoom: number; panX: number; maxVal: number }) {
   const containerRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -221,7 +207,6 @@ export function CanvasPreview({
   backCover,
   onCoreSectionReposition,
   focusedCoreSection,
-  onCoreSectionFocus,
   onUndoSectionFlow,
   onRedoSectionFlow,
   canUndoSectionFlow = false,
@@ -234,7 +219,6 @@ export function CanvasPreview({
   backCover?: string | null
   onCoreSectionReposition?: (pageId: string, sectionId: string, flowPosition: number) => void
   focusedCoreSection?: { pageId: string; sectionId: string } | null
-  onCoreSectionFocus?: (sectionId: string) => void
   onUndoSectionFlow?: () => void
   onRedoSectionFlow?: () => void
   canUndoSectionFlow?: boolean
@@ -406,6 +390,12 @@ export function CanvasPreview({
       return
     }
     if (isSpaceDown || e.button !== 0) {
+      return
+    }
+    const isSelectedInEditor =
+      focusedCoreSection?.sectionId === sectionId &&
+      focusedCoreSection.pageId === currentSlot.page.sourcePageId
+    if (!isSelectedInEditor) {
       return
     }
     e.preventDefault()
@@ -627,47 +617,42 @@ export function CanvasPreview({
                 </div>
               ))}
               {currentSlot.page.sourcePageType === 'core' &&
-                coreSectionOverlays.map((overlay) => {
-                  const isHighlighted = isSectionHighlighted(
-                    sectionDrag,
-                    focusedCoreSection,
-                    overlay.sectionId,
-                    currentSlot.page.sourcePageId,
+                coreSectionOverlays
+                  .filter(
+                    (overlay) =>
+                      focusedCoreSection?.sectionId === overlay.sectionId &&
+                      focusedCoreSection.pageId === currentSlot.page.sourcePageId,
                   )
-                  const isDraggingSection =
-                    isHighlighted && sectionDrag?.sectionId === overlay.sectionId
-                  const translateY = isDraggingSection
-                    ? (sectionDrag.flow - sectionDrag.startFlow) * zoom
-                    : 0
-                  return (
-                    <button
-                      key={`drag-${overlay.sectionId}`}
-                      type="button"
-                      className={cn(
-                        'absolute z-[2] rounded border bg-transparent transition-colors',
-                        isSpaceDown ? 'pointer-events-none' : 'cursor-ns-resize',
-                        isHighlighted
-                          ? 'border-[var(--color-primary)] bg-[color:color-mix(in_srgb,var(--color-primary)_8%,transparent)] ring-2 ring-[color:color-mix(in_srgb,var(--color-primary)_22%,transparent)]'
-                          : 'border-transparent hover:border-[var(--color-hairline-strong)]',
-                      )}
-                      style={{
-                        left: overlay.left * zoom,
-                        top: overlay.top * zoom,
-                        width: overlay.width * zoom,
-                        height: overlay.height * zoom,
-                        transform: `translateY(${translateY}px)`,
-                      }}
-                      title="Drag to reposition section"
-                      onPointerDown={(e) => {
-                        onCoreSectionFocus?.(overlay.sectionId)
-                        handleSectionPointerDown(e, overlay.sectionId, overlay.flowPosition)
-                      }}
-                      onPointerMove={handleSectionPointerMove}
-                      onPointerUp={handleSectionPointerUp}
-                      onPointerCancel={handleSectionPointerUp}
-                    />
-                  )
-                })}
+                  .map((overlay) => {
+                    const isDraggingSection = sectionDrag?.sectionId === overlay.sectionId
+                    const translateY = isDraggingSection
+                      ? (sectionDrag.flow - sectionDrag.startFlow) * zoom
+                      : 0
+                    return (
+                      <button
+                        key={`drag-${overlay.sectionId}`}
+                        type="button"
+                        className={cn(
+                          'absolute z-[2] rounded border border-[var(--color-primary)] bg-[color:color-mix(in_srgb,var(--color-primary)_8%,transparent)] ring-2 ring-[color:color-mix(in_srgb,var(--color-primary)_22%,transparent)] transition-colors',
+                          isSpaceDown ? 'pointer-events-none' : 'cursor-ns-resize',
+                        )}
+                        style={{
+                          left: overlay.left * zoom,
+                          top: overlay.top * zoom,
+                          width: overlay.width * zoom,
+                          height: overlay.height * zoom,
+                          transform: `translateY(${translateY}px)`,
+                        }}
+                        title="Drag to reposition section"
+                        onPointerDown={(e) =>
+                          handleSectionPointerDown(e, overlay.sectionId, overlay.flowPosition)
+                        }
+                        onPointerMove={handleSectionPointerMove}
+                        onPointerUp={handleSectionPointerUp}
+                        onPointerCancel={handleSectionPointerUp}
+                      />
+                    )
+                  })}
               {currentSlot.page.sourcePageType === 'core' &&
                 activeGuide &&
                 activeGuide.localPageIndex === currentSlot.page.sourcePageLocalIndex && (
