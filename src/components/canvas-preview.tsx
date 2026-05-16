@@ -167,26 +167,37 @@ export function CanvasPreview({
   renderedPages,
   previewPageIndex,
   onPreviewPageChange,
+  frontCover,
+  backCover,
 }: {
   renderedPages: RenderedPage[]
   previewPageIndex: number
   onPreviewPageChange: (index: number) => void
+  frontCover?: string | null
+  backCover?: string | null
 }) {
   const [zoom, setZoom] = useState(0.85)
   const [pan, setPan] = useState({ x: 100, y: 50 })
   const [isSpaceDown, setIsSpaceDown] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
 
-  const pageCount = renderedPages.length
+  // Build display slots: optional front cover, content pages, optional back cover
+  type DisplaySlot = { kind: 'cover'; dataUrl: string; label: string } | { kind: 'page'; page: RenderedPage }
+  const displaySlots: DisplaySlot[] = []
+  if (frontCover) displaySlots.push({ kind: 'cover', dataUrl: frontCover, label: 'Front Cover' })
+  for (const page of renderedPages) displaySlots.push({ kind: 'page', page })
+  if (backCover) displaySlots.push({ kind: 'cover', dataUrl: backCover, label: 'Back Cover' })
+
+  const totalSlots = displaySlots.length
 
   const containerRef = useRef<HTMLDivElement>(null)
   const lastPointerRef = useRef<{ x: number; y: number } | null>(null)
 
-  const safeIdx = Math.min(previewPageIndex, Math.max(0, pageCount - 1))
-  const currentPage = renderedPages[safeIdx]
+  const safeIdx = Math.min(previewPageIndex, Math.max(0, totalSlots - 1))
+  const currentSlot = displaySlots[safeIdx]
 
   const goToPrev = () => onPreviewPageChange(Math.max(0, safeIdx - 1))
-  const goToNext = () => onPreviewPageChange(Math.min(pageCount - 1, safeIdx + 1))
+  const goToNext = () => onPreviewPageChange(Math.min(totalSlots - 1, safeIdx + 1))
 
   // Keyboard Spacebar for panning mode
   useEffect(() => {
@@ -283,7 +294,7 @@ export function CanvasPreview({
         <div className="min-w-0 flex-1">
           <h2 className="text-sm font-semibold text-[var(--color-ink)]">Canvas Preview</h2>
           <p className="truncate text-xs text-[var(--color-muted)]">
-            {PAGE_WIDTH} × {PAGE_HEIGHT} · {pageCount} rendered page{pageCount !== 1 ? 's' : ''}
+            {PAGE_WIDTH} × {PAGE_HEIGHT} · {renderedPages.length} rendered page{renderedPages.length !== 1 ? 's' : ''}{(frontCover || backCover) ? ` + ${(frontCover ? 1 : 0) + (backCover ? 1 : 0)} cover${(frontCover && backCover) ? 's' : ''}` : ''}
           </p>
         </div>
 
@@ -371,12 +382,23 @@ export function CanvasPreview({
             transform: `translate(${pan.x}px, ${pan.y}px)`,
           }}
         >
-          {currentPage ? (
+          {currentSlot?.kind === 'cover' ? (
+            <div
+              className="absolute animate-fade-in border border-[var(--color-hairline)] bg-white transition-opacity overflow-hidden"
+              style={{ width: PAGE_WIDTH * zoom, height: PAGE_HEIGHT * zoom }}
+            >
+              <img
+                src={currentSlot.dataUrl}
+                alt={currentSlot.label}
+                className="pointer-events-none h-full w-full object-contain"
+              />
+            </div>
+          ) : currentSlot?.kind === 'page' ? (
             <div
               className="absolute animate-fade-in border border-[var(--color-hairline)] bg-white transition-opacity"
               style={{ width: PAGE_WIDTH * zoom, height: PAGE_HEIGHT * zoom }}
             >
-              {currentPage.blocks.map((block) => (
+              {currentSlot.page.blocks.map((block) => (
                 <div
                   key={block.id}
                   className="pointer-events-none absolute whitespace-pre-wrap text-[var(--color-ink)]"
@@ -411,7 +433,9 @@ export function CanvasPreview({
       {/* Footer Navigation */}
       <div className="z-10 flex items-center justify-between gap-3 rounded-b-xl border-t border-[var(--color-hairline)] bg-[var(--surface-canvas)] px-4 py-2.5">
         <div className="text-xs font-medium text-[var(--color-muted)]">
-          Page {pageCount > 0 ? safeIdx + 1 : 0} of {pageCount}
+          {currentSlot?.kind === 'cover'
+            ? currentSlot.label
+            : `Page ${totalSlots > 0 ? safeIdx + 1 : 0} of ${totalSlots}`}
         </div>
         <div className="flex items-center gap-1">
           <Button
@@ -419,7 +443,7 @@ export function CanvasPreview({
             variant="outline"
             size="sm"
             className="h-8 px-3 text-xs text-[var(--color-body)] hover:text-[var(--color-ink)]"
-            disabled={safeIdx === 0 || pageCount === 0}
+            disabled={safeIdx === 0 || totalSlots === 0}
             onClick={goToPrev}
           >
             <ChevronLeft className="mr-1 size-3.5" />
@@ -430,7 +454,7 @@ export function CanvasPreview({
             variant="outline"
             size="sm"
             className="h-8 px-3 text-xs text-[var(--color-body)] hover:text-[var(--color-ink)]"
-            disabled={safeIdx >= pageCount - 1 || pageCount === 0}
+            disabled={safeIdx >= totalSlots - 1 || totalSlots === 0}
             onClick={goToNext}
           >
             Next

@@ -10,12 +10,12 @@ import type { CmsPage, CmsSettings } from '@/types/cms'
 
 /* ── Export Dialog ────────────────────────────────────────── */
 
-export function ExportDialog({ pages, settings, title }: {
-  pages: CmsPage[]; settings: CmsSettings; title: string
+export function ExportDialog({ pages, settings, title, frontCover, backCover }: {
+  pages: CmsPage[]; settings: CmsSettings; title: string; frontCover?: string | null; backCover?: string | null
 }) {
   const [open, setOpen] = useState(false)
   const [copied, setCopied] = useState(false)
-  const json = exportBooklet(pages, settings, title)
+  const json = exportBooklet(pages, settings, title, frontCover, backCover)
 
   const handleCopy = async () => {
     await navigator.clipboard.writeText(json)
@@ -74,7 +74,7 @@ type ImportState = { step: 'input' } | { step: 'valid'; data: BookletExport } | 
 
 export function ImportDialog({ pages, onImport }: {
   pages: CmsPage[]
-  onImport: (pages: CmsPage[], settings?: CmsSettings, title?: string) => void
+  onImport: (pages: CmsPage[], settings?: CmsSettings, title?: string, frontCover?: string | null, backCover?: string | null) => void
 }) {
   const [open, setOpen] = useState(false)
   const [mode, setMode] = useState<ImportMode>('replace')
@@ -113,7 +113,7 @@ export function ImportDialog({ pages, onImport }: {
     if (state.step !== 'valid') return
     const finalPages = prepareImportPages(state.data, pages, mode)
     const summary = getImportSummary(state.data.pages)
-    onImport(finalPages, state.data.settings, state.data.title)
+    onImport(finalPages, state.data.settings, state.data.title, state.data.frontCover, state.data.backCover)
     setState({ step: 'done', summary })
     setTimeout(() => { setOpen(false); reset() }, 1800)
   }

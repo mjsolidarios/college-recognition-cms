@@ -3,6 +3,8 @@ import type { CmsPage, CmsSettings, CorePage } from '@/types/cms'
 
 const PAGES_KEY = 'cms_v1_pages'
 const SETTINGS_KEY = 'cms_v1_settings'
+const FRONT_COVER_KEY = 'cms_v1_front_cover'
+const BACK_COVER_KEY = 'cms_v1_back_cover'
 
 function canUseStorage() {
   return typeof window !== 'undefined' && typeof window.localStorage !== 'undefined'
@@ -222,4 +224,32 @@ export function saveSettings(settings: CmsSettings): CmsSettings {
   // TODO: replace with Supabase.
   writeJson(SETTINGS_KEY, settings)
   return settings
+}
+
+export function getFrontCover(): string | null {
+  if (!canUseStorage()) return null
+  return window.localStorage.getItem(FRONT_COVER_KEY)
+}
+
+export function saveFrontCover(dataUrl: string | null): void {
+  if (!canUseStorage()) return
+  if (dataUrl === null) {
+    window.localStorage.removeItem(FRONT_COVER_KEY)
+  } else {
+    window.localStorage.setItem(FRONT_COVER_KEY, dataUrl)
+  }
+}
+
+export function getBackCover(): string | null {
+  if (!canUseStorage()) return null
+  return window.localStorage.getItem(BACK_COVER_KEY)
+}
+
+export function saveBackCover(dataUrl: string | null): void {
+  if (!canUseStorage()) return
+  if (dataUrl === null) {
+    window.localStorage.removeItem(BACK_COVER_KEY)
+  } else {
+    window.localStorage.setItem(BACK_COVER_KEY, dataUrl)
+  }
 }
