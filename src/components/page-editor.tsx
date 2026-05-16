@@ -1,4 +1,16 @@
-import { ChevronDown, Plus, Trash2 } from 'lucide-react'
+import {
+  DndContext,
+  KeyboardSensor,
+  PointerSensor,
+  useDraggable,
+  useDroppable,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+  type DraggableAttributes,
+  type DraggableSyntheticListeners,
+} from '@dnd-kit/core'
+import { ChevronDown, GripVertical, Plus, Trash2 } from 'lucide-react'
 
 import { BulkAddAcademicDialog, BulkAddNonAcademicDialog } from '@/components/bulk-add-dialog'
 import { useState } from 'react'
@@ -33,6 +45,9 @@ const TYPE_COLORS: Record<string, string> = {
   'non-academic': 'bg-[rgb(var(--type-non-academic))]',
 }
 
+const REORDER_ACTIVATION_DISTANCE = 8
+const REORDER_DROP_TARGET_CLASS = 'ring-2 ring-[color:color-mix(in_srgb,var(--color-primary)_18%,transparent)]'
+
 function SectionLabel({ children }: { children: string }) {
   return <label className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--color-muted)]">{children}</label>
 }
@@ -42,21 +57,51 @@ function CollapsibleItemCard({
   title,
   index,
   onDelete,
+  containerRef,
+  containerStyle,
+  containerClassName,
+  dragListeners,
+  dragAttributes,
+  isDragging = false,
 }: {
   children: React.ReactNode
   title: string
   index: number
   onDelete: () => void
+  containerRef?: (node: HTMLDivElement | null) => void
+  containerStyle?: React.CSSProperties
+  containerClassName?: string
+  dragListeners?: DraggableSyntheticListeners
+  dragAttributes?: DraggableAttributes
+  isDragging?: boolean
 }) {
   const [isOpen, setIsOpen] = useState(true)
 
   return (
-    <div className="animate-slide-up rounded-lg border border-[var(--color-hairline)] bg-[var(--surface-canvas)]/60 transition-colors hover:border-[var(--color-hairline-strong)]">
+    <div
+      ref={containerRef}
+      style={containerStyle}
+      className={cn(
+        'animate-slide-up rounded-lg border border-[var(--color-hairline)] bg-[var(--surface-canvas)]/60 transition-colors hover:border-[var(--color-hairline-strong)]',
+        isDragging && 'opacity-70',
+        containerClassName,
+      )}
+    >
       <button
         type="button"
-        className="flex w-full items-center gap-2 px-3 py-2.5 text-left cursor-pointer"
+        className="flex w-full items-center gap-2 px-3 py-2.5 text-left"
         onClick={() => setIsOpen(!isOpen)}
       >
+        <span
+          className="inline-flex cursor-grab text-[var(--color-muted-soft)] transition-colors hover:text-[var(--color-muted)]"
+          aria-label="Drag to reorder"
+          title="Drag to reorder"
+          {...dragListeners}
+          {...dragAttributes}
+          onClick={(event) => event.stopPropagation()}
+        >
+          <GripVertical className="size-3.5" />
+        </span>
         <span className="flex size-5 items-center justify-center rounded bg-[var(--surface-strong)] text-[10px] font-bold tabular-nums text-[var(--color-muted)]">
           {index}
         </span>
@@ -101,6 +146,66 @@ function updateItem<T extends { id: string }>(items: T[], itemId: string, update
   return items.map((item) => (item.id === itemId ? updater(item) : item))
 }
 
+function reorderItems<T extends { id: string }>(items: T[], activeId: string, overId: string) {
+  const activeIndex = items.findIndex((item) => item.id === activeId)
+  const overIndex = items.findIndex((item) => item.id === overId)
+
+  if (activeIndex < 0 || overIndex < 0) {
+    return items
+  }
+
+  const reorderedItems = [...items]
+  const [activeItem] = reorderedItems.splice(activeIndex, 1)
+  reorderedItems.splice(overIndex, 0, activeItem)
+  return reorderedItems
+}
+
+function ReorderableItemCard({
+  itemId,
+  children,
+  title,
+  index,
+  onDelete,
+}: {
+  itemId: string
+  children: React.ReactNode
+  title: string
+  index: number
+  onDelete: () => void
+}) {
+  const { setNodeRef: setDroppableRef, isOver } = useDroppable({ id: itemId })
+  const { attributes, listeners, setNodeRef: setDraggableRef, transform, isDragging } = useDraggable({ id: itemId })
+  const style = transform
+    ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)` }
+    : undefined
+
+  return (
+    <CollapsibleItemCard
+      title={title}
+      index={index}
+      onDelete={onDelete}
+      containerRef={(node) => {
+        setDroppableRef(node)
+        setDraggableRef(node)
+      }}
+      containerStyle={style}
+      containerClassName={cn(isOver && REORDER_DROP_TARGET_CLASS)}
+      isDragging={isDragging}
+      dragListeners={listeners}
+      dragAttributes={attributes}
+    >
+      {children}
+    </CollapsibleItemCard>
+  )
+}
+
+function useEditorReorderSensor() {
+  return useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: REORDER_ACTIVATION_DISTANCE } }),
+    useSensor(KeyboardSensor),
+  )
+}
+
 function EditorChrome({ page, children }: { page: CmsPage; children: React.ReactNode }) {
   return (
     <div className="flex h-full flex-col rounded-xl border border-[var(--color-hairline)] bg-white">
@@ -141,12 +246,27 @@ function EditorChrome({ page, children }: { page: CmsPage; children: React.React
 }
 
 function ProgramEditor({ page, onChange }: { page: ProgramPage; onChange: (page: CmsPage) => void }) {
+  const sensors = useEditorReorderSensor()
   const updateRow = (rowId: string, updater: (row: ProgramRow) => ProgramRow) => {
     onChange({
       ...page,
       content: {
         ...page.content,
         rows: updateItem(page.content.rows, rowId, updater),
+      },
+    })
+  }
+
+  const handleDragEnd = ({ active, over }: DragEndEvent) => {
+    if (!over || active.id === over.id) {
+      return
+    }
+
+    onChange({
+      ...page,
+      content: {
+        ...page.content,
+        rows: reorderItems(page.content.rows, String(active.id), String(over.id)),
       },
     })
   }
@@ -170,13 +290,15 @@ function ProgramEditor({ page, onChange }: { page: ProgramPage; onChange: (page:
           <div className="h-px flex-1 bg-[var(--color-hairline)]" />
         </div>
 
-        <div className="space-y-2">
-          {page.content.rows.map((row, index) => (
-            <CollapsibleItemCard
-              key={row.id}
-              title={row.leftTitle || 'Untitled row'}
-              index={index + 1}
-              onDelete={() =>
+        <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
+          <div className="space-y-2">
+            {page.content.rows.map((row, index) => (
+              <ReorderableItemCard
+                key={row.id}
+                itemId={row.id}
+                title={row.leftTitle || 'Untitled row'}
+                index={index + 1}
+                onDelete={() =>
                 onChange({
                   ...page,
                   content: {
@@ -185,28 +307,29 @@ function ProgramEditor({ page, onChange }: { page: ProgramPage; onChange: (page:
                   },
                 })
               }
-            >
-              <div className="grid gap-3 md:grid-cols-2">
-                <div className="space-y-1.5">
-                  <SectionLabel>Left title</SectionLabel>
-                  <Input value={row.leftTitle} onChange={(event) => updateRow(row.id, (current) => ({ ...current, leftTitle: event.target.value }))} />
+              >
+                <div className="grid gap-3 md:grid-cols-2">
+                  <div className="space-y-1.5">
+                    <SectionLabel>Left title</SectionLabel>
+                    <Input value={row.leftTitle} onChange={(event) => updateRow(row.id, (current) => ({ ...current, leftTitle: event.target.value }))} />
+                  </div>
+                  <div className="space-y-1.5">
+                    <SectionLabel>Right title</SectionLabel>
+                    <Input value={row.rightTitle ?? ''} onChange={(event) => updateRow(row.id, (current) => ({ ...current, rightTitle: event.target.value }))} />
+                  </div>
+                  <div className="space-y-1.5">
+                    <SectionLabel>Left body</SectionLabel>
+                    <Textarea value={row.leftBody} onChange={(event) => updateRow(row.id, (current) => ({ ...current, leftBody: event.target.value }))} />
+                  </div>
+                  <div className="space-y-1.5">
+                    <SectionLabel>Right body</SectionLabel>
+                    <Textarea value={row.rightBody ?? ''} onChange={(event) => updateRow(row.id, (current) => ({ ...current, rightBody: event.target.value }))} />
+                  </div>
                 </div>
-                <div className="space-y-1.5">
-                  <SectionLabel>Right title</SectionLabel>
-                  <Input value={row.rightTitle ?? ''} onChange={(event) => updateRow(row.id, (current) => ({ ...current, rightTitle: event.target.value }))} />
-                </div>
-                <div className="space-y-1.5">
-                  <SectionLabel>Left body</SectionLabel>
-                  <Textarea value={row.leftBody} onChange={(event) => updateRow(row.id, (current) => ({ ...current, leftBody: event.target.value }))} />
-                </div>
-                <div className="space-y-1.5">
-                  <SectionLabel>Right body</SectionLabel>
-                  <Textarea value={row.rightBody ?? ''} onChange={(event) => updateRow(row.id, (current) => ({ ...current, rightBody: event.target.value }))} />
-                </div>
-              </div>
-            </CollapsibleItemCard>
-          ))}
-        </div>
+              </ReorderableItemCard>
+            ))}
+          </div>
+        </DndContext>
         <AddButton
           onClick={() =>
             onChange({
@@ -235,12 +358,27 @@ function ProgramEditor({ page, onChange }: { page: ProgramPage; onChange: (page:
 }
 
 function AcademicEditor({ page, onChange }: { page: AcademicPage; onChange: (page: CmsPage) => void }) {
+  const sensors = useEditorReorderSensor()
   const updateEntry = (entryId: string, updater: (entry: AcademicEntry) => AcademicEntry) => {
     onChange({
       ...page,
       content: {
         ...page.content,
         entries: updateItem(page.content.entries, entryId, updater),
+      },
+    })
+  }
+
+  const handleDragEnd = ({ active, over }: DragEndEvent) => {
+    if (!over || active.id === over.id) {
+      return
+    }
+
+    onChange({
+      ...page,
+      content: {
+        ...page.content,
+        entries: reorderItems(page.content.entries, String(active.id), String(over.id)),
       },
     })
   }
@@ -262,40 +400,43 @@ function AcademicEditor({ page, onChange }: { page: AcademicPage; onChange: (pag
           <div className="h-px flex-1 bg-[var(--color-hairline)]" />
         </div>
 
-        <div className="space-y-2">
-          {page.content.entries.map((entry, index) => (
-            <CollapsibleItemCard
-              key={entry.id}
-              title={entry.name || 'Untitled'}
-              index={index + 1}
-              onDelete={() =>
+        <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
+          <div className="space-y-2">
+            {page.content.entries.map((entry, index) => (
+              <ReorderableItemCard
+                key={entry.id}
+                itemId={entry.id}
+                title={entry.name || 'Untitled'}
+                index={index + 1}
+                onDelete={() =>
                 onChange({
                   ...page,
                   content: { ...page.content, entries: page.content.entries.filter((item) => item.id !== entry.id) },
                 })
               }
-            >
-              <div className="grid gap-3 md:grid-cols-2">
-                <div className="space-y-1.5">
-                  <SectionLabel>Name</SectionLabel>
-                  <Input value={entry.name} onChange={(event) => updateEntry(entry.id, (current) => ({ ...current, name: event.target.value }))} />
+              >
+                <div className="grid gap-3 md:grid-cols-2">
+                  <div className="space-y-1.5">
+                    <SectionLabel>Name</SectionLabel>
+                    <Input value={entry.name} onChange={(event) => updateEntry(entry.id, (current) => ({ ...current, name: event.target.value }))} />
+                  </div>
+                  <div className="space-y-1.5">
+                    <SectionLabel>Award / Program</SectionLabel>
+                    <Input value={entry.award} onChange={(event) => updateEntry(entry.id, (current) => ({ ...current, award: event.target.value }))} />
+                  </div>
+                  <div className="space-y-1.5">
+                    <SectionLabel>Category</SectionLabel>
+                    <Input value={entry.category} onChange={(event) => updateEntry(entry.id, (current) => ({ ...current, category: event.target.value }))} />
+                  </div>
+                  <div className="space-y-1.5">
+                    <SectionLabel>Grade level</SectionLabel>
+                    <Input value={entry.gradeLevel} onChange={(event) => updateEntry(entry.id, (current) => ({ ...current, gradeLevel: event.target.value }))} />
+                  </div>
                 </div>
-                <div className="space-y-1.5">
-                  <SectionLabel>Award / Program</SectionLabel>
-                  <Input value={entry.award} onChange={(event) => updateEntry(entry.id, (current) => ({ ...current, award: event.target.value }))} />
-                </div>
-                <div className="space-y-1.5">
-                  <SectionLabel>Category</SectionLabel>
-                  <Input value={entry.category} onChange={(event) => updateEntry(entry.id, (current) => ({ ...current, category: event.target.value }))} />
-                </div>
-                <div className="space-y-1.5">
-                  <SectionLabel>Grade level</SectionLabel>
-                  <Input value={entry.gradeLevel} onChange={(event) => updateEntry(entry.id, (current) => ({ ...current, gradeLevel: event.target.value }))} />
-                </div>
-              </div>
-            </CollapsibleItemCard>
-          ))}
-        </div>
+              </ReorderableItemCard>
+            ))}
+          </div>
+        </DndContext>
         <div className="grid grid-cols-2 gap-2">
           <AddButton
             onClick={() =>
@@ -334,12 +475,27 @@ function AcademicEditor({ page, onChange }: { page: AcademicPage; onChange: (pag
 }
 
 function NonAcademicEditor({ page, onChange }: { page: NonAcademicPage; onChange: (page: CmsPage) => void }) {
+  const sensors = useEditorReorderSensor()
   const updateEntry = (entryId: string, updater: (entry: NonAcademicEntry) => NonAcademicEntry) => {
     onChange({
       ...page,
       content: {
         ...page.content,
         entries: updateItem(page.content.entries, entryId, updater),
+      },
+    })
+  }
+
+  const handleDragEnd = ({ active, over }: DragEndEvent) => {
+    if (!over || active.id === over.id) {
+      return
+    }
+
+    onChange({
+      ...page,
+      content: {
+        ...page.content,
+        entries: reorderItems(page.content.entries, String(active.id), String(over.id)),
       },
     })
   }
@@ -361,36 +517,39 @@ function NonAcademicEditor({ page, onChange }: { page: NonAcademicPage; onChange
           <div className="h-px flex-1 bg-[var(--color-hairline)]" />
         </div>
 
-        <div className="space-y-2">
-          {page.content.entries.map((entry, index) => (
-            <CollapsibleItemCard
-              key={entry.id}
-              title={entry.name || 'Untitled'}
-              index={index + 1}
-              onDelete={() =>
+        <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
+          <div className="space-y-2">
+            {page.content.entries.map((entry, index) => (
+              <ReorderableItemCard
+                key={entry.id}
+                itemId={entry.id}
+                title={entry.name || 'Untitled'}
+                index={index + 1}
+                onDelete={() =>
                 onChange({
                   ...page,
                   content: { ...page.content, entries: page.content.entries.filter((item) => item.id !== entry.id) },
                 })
               }
-            >
-              <div className="grid gap-3 md:grid-cols-2">
-                <div className="space-y-1.5">
-                  <SectionLabel>Name</SectionLabel>
-                  <Input value={entry.name} onChange={(event) => updateEntry(entry.id, (current) => ({ ...current, name: event.target.value }))} />
+              >
+                <div className="grid gap-3 md:grid-cols-2">
+                  <div className="space-y-1.5">
+                    <SectionLabel>Name</SectionLabel>
+                    <Input value={entry.name} onChange={(event) => updateEntry(entry.id, (current) => ({ ...current, name: event.target.value }))} />
+                  </div>
+                  <div className="space-y-1.5">
+                    <SectionLabel>Award</SectionLabel>
+                    <Input value={entry.award} onChange={(event) => updateEntry(entry.id, (current) => ({ ...current, award: event.target.value }))} />
+                  </div>
+                  <div className="space-y-1.5 md:col-span-2">
+                    <SectionLabel>Category</SectionLabel>
+                    <Input value={entry.category} onChange={(event) => updateEntry(entry.id, (current) => ({ ...current, category: event.target.value }))} />
+                  </div>
                 </div>
-                <div className="space-y-1.5">
-                  <SectionLabel>Award</SectionLabel>
-                  <Input value={entry.award} onChange={(event) => updateEntry(entry.id, (current) => ({ ...current, award: event.target.value }))} />
-                </div>
-                <div className="space-y-1.5 md:col-span-2">
-                  <SectionLabel>Category</SectionLabel>
-                  <Input value={entry.category} onChange={(event) => updateEntry(entry.id, (current) => ({ ...current, category: event.target.value }))} />
-                </div>
-              </div>
-            </CollapsibleItemCard>
-          ))}
-        </div>
+              </ReorderableItemCard>
+            ))}
+          </div>
+        </DndContext>
         <div className="grid grid-cols-2 gap-2">
           <AddButton
             onClick={() =>
@@ -428,12 +587,27 @@ function NonAcademicEditor({ page, onChange }: { page: NonAcademicPage; onChange
 }
 
 function CoreEditor({ page, onChange }: { page: CorePage; onChange: (page: CmsPage) => void }) {
+  const sensors = useEditorReorderSensor()
   const updateSection = (sectionId: string, updater: (section: CoreSection) => CoreSection) => {
     onChange({
       ...page,
       content: {
         ...page.content,
         sections: updateItem(page.content.sections, sectionId, updater),
+      },
+    })
+  }
+
+  const handleDragEnd = ({ active, over }: DragEndEvent) => {
+    if (!over || active.id === over.id) {
+      return
+    }
+
+    onChange({
+      ...page,
+      content: {
+        ...page.content,
+        sections: reorderItems(page.content.sections, String(active.id), String(over.id)),
       },
     })
   }
@@ -459,13 +633,15 @@ function CoreEditor({ page, onChange }: { page: CorePage; onChange: (page: CmsPa
           <div className="h-px flex-1 bg-[var(--color-hairline)]" />
         </div>
 
-        <div className="space-y-2">
-          {page.content.sections.map((section, index) => (
-            <CollapsibleItemCard
-              key={section.id}
-              title={section.title || 'Untitled'}
-              index={index + 1}
-              onDelete={() =>
+        <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
+          <div className="space-y-2">
+            {page.content.sections.map((section, index) => (
+              <ReorderableItemCard
+                key={section.id}
+                itemId={section.id}
+                title={section.title || 'Untitled'}
+                index={index + 1}
+                onDelete={() =>
                 onChange({
                   ...page,
                   content: {
@@ -474,20 +650,21 @@ function CoreEditor({ page, onChange }: { page: CorePage; onChange: (page: CmsPa
                   },
                 })
               }
-            >
-              <div className="space-y-3">
-                <div className="space-y-1.5">
-                  <SectionLabel>Title</SectionLabel>
-                  <Input value={section.title} onChange={(event) => updateSection(section.id, (current) => ({ ...current, title: event.target.value }))} />
+              >
+                <div className="space-y-3">
+                  <div className="space-y-1.5">
+                    <SectionLabel>Title</SectionLabel>
+                    <Input value={section.title} onChange={(event) => updateSection(section.id, (current) => ({ ...current, title: event.target.value }))} />
+                  </div>
+                  <div className="space-y-1.5">
+                    <SectionLabel>Body</SectionLabel>
+                    <Textarea value={section.body} onChange={(event) => updateSection(section.id, (current) => ({ ...current, body: event.target.value }))} />
+                  </div>
                 </div>
-                <div className="space-y-1.5">
-                  <SectionLabel>Body</SectionLabel>
-                  <Textarea value={section.body} onChange={(event) => updateSection(section.id, (current) => ({ ...current, body: event.target.value }))} />
-                </div>
-              </div>
-            </CollapsibleItemCard>
-          ))}
-        </div>
+              </ReorderableItemCard>
+            ))}
+          </div>
+        </DndContext>
         <AddButton
           onClick={() =>
             onChange({
