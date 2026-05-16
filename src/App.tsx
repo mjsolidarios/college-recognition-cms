@@ -31,6 +31,7 @@ import {
   type SectionFlowCommand,
 } from '@/lib/core-section-flow'
 import { snapFlowPosition } from '@/lib/flow-position'
+import { previewSlotIndexForCoreSection, previewSlotIndexForPageId } from '@/lib/preview-navigation'
 import { renderDocument } from '@/lib/layout'
 import { defaultSettings, seedPages } from '@/lib/sample-data'
 import { deletePage, getPages, getSettings, savePage, saveSettings, getFrontCover, saveFrontCover, getBackCover, saveBackCover } from '@/lib/storage'
@@ -236,6 +237,7 @@ function App() {
   const [coverUploadError, setCoverUploadError] = useState<string | null>(null)
   const [sectionFlowUndo, setSectionFlowUndo] = useState<SectionFlowCommand[]>([])
   const [sectionFlowRedo, setSectionFlowRedo] = useState<SectionFlowCommand[]>([])
+  const [focusedCoreSectionId, setFocusedCoreSectionId] = useState<string | null>(null)
   const pagesRef = useRef(pages)
   pagesRef.current = pages
 
@@ -251,6 +253,26 @@ function App() {
   useEffect(() => {
     warmPdfExportWorker()
   }, [])
+
+  useEffect(() => {
+    if (activePage?.type !== 'core') {
+      setFocusedCoreSectionId(null)
+      return
+    }
+    if (
+      focusedCoreSectionId &&
+      !activePage.content.sections.some((section) => section.id === focusedCoreSectionId)
+    ) {
+      setFocusedCoreSectionId(null)
+    }
+  }, [activePage, focusedCoreSectionId])
+
+  const focusedCoreSection = useMemo(() => {
+    if (activePage?.type !== 'core' || !focusedCoreSectionId) {
+      return null
+    }
+    return { pageId: activePage.id, sectionId: focusedCoreSectionId }
+  }, [activePage, focusedCoreSectionId])
 
   const persistPages = (nextPages: CmsPage[]) => {
     const orderedPages = [...nextPages].sort((left, right) => left.order - right.order)
@@ -353,6 +375,41 @@ function App() {
     persistPages(reorderPages(pages, activeId, overId))
   }
 
+  const syncPreviewToPage = useCallback(
+    (pageId: string) => {
+      const index = previewSlotIndexForPageId(renderedPages, pageId, { hasFrontCover: Boolean(frontCover) })
+      if (index !== null) {
+        setPreviewPageIndex(index)
+      }
+    },
+    [renderedPages, frontCover],
+  )
+
+  const handleSelectPage = useCallback(
+    (pageId: string) => {
+      setActivePageId(pageId)
+      setFocusedCoreSectionId(null)
+      syncPreviewToPage(pageId)
+    },
+    [syncPreviewToPage],
+  )
+
+  const handleCoreSectionFocus = useCallback(
+    (sectionId: string) => {
+      if (activePage?.type !== 'core') {
+        return
+      }
+      setFocusedCoreSectionId(sectionId)
+      const index = previewSlotIndexForCoreSection(renderedPages, activePage.id, sectionId, {
+        hasFrontCover: Boolean(frontCover),
+      })
+      if (index !== null) {
+        setPreviewPageIndex(index)
+      }
+    },
+    [activePage, frontCover, renderedPages],
+  )
+
   const updateSetting = <K extends keyof CmsSettings>(key: K, value: CmsSettings[K]) => {
     const nextSettings = { ...settings, [key]: value }
     setSettings(saveSettings(nextSettings))
@@ -445,10 +502,14 @@ function App() {
   }, [editorWidth])
 
   /* ── Mobile page-list callbacks ────────────────────────── */
-  const handleMobileSelect = useCallback((id: string) => {
-    setActivePageId(id)
-    setMobileTab('canvas')
-  }, [])
+  const handleMobileSelect = useCallback(
+    (pageId: string) => {
+      setActivePageId(pageId)
+      syncPreviewToPage(pageId)
+      setMobileTab('canvas')
+    },
+    [syncPreviewToPage],
+  )
 
   const handleMobileAdd = useCallback((type: PageType) => {
     handleAddPage(type)
@@ -512,7 +573,14 @@ function App() {
       </TabsList>
       <TabsContent value="editor" className="min-h-0 flex-1">
         <ScrollArea className="h-[calc(100vh-14rem)] xl:h-[calc(100vh-11rem)]">
-          {activePage ? <PageEditor page={activePage} onChange={handlePageChange} /> : null}
+          {activePage ? (
+            <PageEditor
+              page={activePage}
+              onChange={handlePageChange}
+              selectedCoreSectionId={focusedCoreSectionId}
+              onCoreSectionFocus={handleCoreSectionFocus}
+            />
+          ) : null}
         </ScrollArea>
       </TabsContent>
       <TabsContent value="settings" className="min-h-0 flex-1">
@@ -790,7 +858,7 @@ function App() {
               </div>
               <div>
                 <div className="flex items-center gap-2">
-                  <h1 className="text-sm font-semibold tracking-tight text-[var(--color-ink)]">Booklet Builder</h1>
+                  <h1 className="text-sm font-semibold tracking-tight text-[var(--color-ink)]">Parangal Builder</h1>
                   {settings.documentYear && (
                     <span className="rounded-full border border-[var(--color-hairline-strong)] bg-[var(--surface-strong)] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--color-ink)]">
                       {settings.documentYear}
@@ -910,7 +978,7 @@ function App() {
             <PageList
               pages={pages}
               activePageId={activePage?.id ?? ''}
-              onSelect={setActivePageId}
+              onSelect={handleSelectPage}
               onAdd={handleAddPage}
               onDelete={handleDeletePage}
               onReorder={handleReorder}
@@ -926,6 +994,8 @@ function App() {
                 frontCover={frontCover}
                 backCover={backCover}
                 onCoreSectionReposition={handleCoreSectionReposition}
+                focusedCoreSection={focusedCoreSection}
+                onCoreSectionFocus={handleCoreSectionFocus}
                 onUndoSectionFlow={handleUndoSectionFlow}
                 onRedoSectionFlow={handleRedoSectionFlow}
                 canUndoSectionFlow={sectionFlowUndo.length > 0}
@@ -967,6 +1037,8 @@ function App() {
                 frontCover={frontCover}
                 backCover={backCover}
                 onCoreSectionReposition={handleCoreSectionReposition}
+                focusedCoreSection={focusedCoreSection}
+                onCoreSectionFocus={handleCoreSectionFocus}
                 onUndoSectionFlow={handleUndoSectionFlow}
                 onRedoSectionFlow={handleRedoSectionFlow}
                 canUndoSectionFlow={sectionFlowUndo.length > 0}

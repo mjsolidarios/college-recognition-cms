@@ -51,12 +51,18 @@ function placementFromFlow(flowPosition: number, contentTop: number, maxContentY
   return { localPageIndex, column, y }
 }
 
-function isSectionActive(
+function isSectionHighlighted(
   sectionDrag: { pageId: string; sectionId: string } | null,
+  focusedCoreSection: { pageId: string; sectionId: string } | null | undefined,
   sectionId: string,
-  pageId: string,
+  sourcePageId: string,
 ) {
-  return sectionDrag?.sectionId === sectionId && sectionDrag.pageId === pageId
+  if (sectionDrag?.sectionId === sectionId && sectionDrag.pageId === sourcePageId) {
+    return true
+  }
+  return (
+    focusedCoreSection?.sectionId === sectionId && focusedCoreSection.pageId === sourcePageId
+  )
 }
 
 function HorizontalRuler({ zoom, panX, maxVal }: { zoom: number; panX: number; maxVal: number }) {
@@ -214,6 +220,8 @@ export function CanvasPreview({
   frontCover,
   backCover,
   onCoreSectionReposition,
+  focusedCoreSection,
+  onCoreSectionFocus,
   onUndoSectionFlow,
   onRedoSectionFlow,
   canUndoSectionFlow = false,
@@ -225,6 +233,8 @@ export function CanvasPreview({
   frontCover?: string | null
   backCover?: string | null
   onCoreSectionReposition?: (pageId: string, sectionId: string, flowPosition: number) => void
+  focusedCoreSection?: { pageId: string; sectionId: string } | null
+  onCoreSectionFocus?: (sectionId: string) => void
   onUndoSectionFlow?: () => void
   onRedoSectionFlow?: () => void
   canUndoSectionFlow?: boolean
@@ -537,7 +547,7 @@ export function CanvasPreview({
       {/* Infinite Canvas Viewport */}
       <div
         ref={containerRef}
-        className={cn('relative min-h-0 flex-1 overflow-hidden bg-[var(--surface-canvas)]', cursorClass)}
+        className={cn('canvas-pattern relative min-h-0 flex-1 overflow-hidden', cursorClass)}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
@@ -590,13 +600,13 @@ export function CanvasPreview({
             </div>
           ) : currentSlot?.kind === 'page' ? (
             <div
-              className="absolute animate-fade-in border border-[var(--color-hairline)] bg-white transition-opacity"
+              className="absolute animate-fade-in overflow-hidden border border-[var(--color-hairline)] bg-white shadow-[0_1px_2px_rgba(38,37,30,0.06),0_8px_24px_rgba(38,37,30,0.08)] transition-opacity"
               style={{ width: PAGE_WIDTH * zoom, height: PAGE_HEIGHT * zoom }}
             >
               {currentSlot.page.blocks.map((block) => (
                 <div
                   key={block.id}
-                  className="pointer-events-none absolute whitespace-pre-wrap text-[var(--color-ink)]"
+                  className="pointer-events-none absolute z-[1] whitespace-pre-wrap text-[var(--color-ink)]"
                   style={{
                     left: block.x * zoom,
                     top: block.y * zoom,
@@ -618,17 +628,26 @@ export function CanvasPreview({
               ))}
               {currentSlot.page.sourcePageType === 'core' &&
                 coreSectionOverlays.map((overlay) => {
-                  const isActive = isSectionActive(sectionDrag, overlay.sectionId, currentSlot.page.sourcePageId)
-                  const translateY = isActive && sectionDrag ? (sectionDrag.flow - sectionDrag.startFlow) * zoom : 0
+                  const isHighlighted = isSectionHighlighted(
+                    sectionDrag,
+                    focusedCoreSection,
+                    overlay.sectionId,
+                    currentSlot.page.sourcePageId,
+                  )
+                  const isDraggingSection =
+                    isHighlighted && sectionDrag?.sectionId === overlay.sectionId
+                  const translateY = isDraggingSection
+                    ? (sectionDrag.flow - sectionDrag.startFlow) * zoom
+                    : 0
                   return (
                     <button
                       key={`drag-${overlay.sectionId}`}
                       type="button"
                       className={cn(
-                        'absolute rounded border bg-transparent transition-colors',
+                        'absolute z-[2] rounded border bg-transparent transition-colors',
                         isSpaceDown ? 'pointer-events-none' : 'cursor-ns-resize',
-                        isActive
-                          ? 'border-[var(--color-primary)] bg-[color:color-mix(in_srgb,var(--color-primary)_8%,transparent)]'
+                        isHighlighted
+                          ? 'border-[var(--color-primary)] bg-[color:color-mix(in_srgb,var(--color-primary)_8%,transparent)] ring-2 ring-[color:color-mix(in_srgb,var(--color-primary)_22%,transparent)]'
                           : 'border-transparent hover:border-[var(--color-hairline-strong)]',
                       )}
                       style={{
@@ -639,7 +658,10 @@ export function CanvasPreview({
                         transform: `translateY(${translateY}px)`,
                       }}
                       title="Drag to reposition section"
-                      onPointerDown={(e) => handleSectionPointerDown(e, overlay.sectionId, overlay.flowPosition)}
+                      onPointerDown={(e) => {
+                        onCoreSectionFocus?.(overlay.sectionId)
+                        handleSectionPointerDown(e, overlay.sectionId, overlay.flowPosition)
+                      }}
                       onPointerMove={handleSectionPointerMove}
                       onPointerUp={handleSectionPointerUp}
                       onPointerCancel={handleSectionPointerUp}

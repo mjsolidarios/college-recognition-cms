@@ -63,6 +63,8 @@ function CollapsibleItemCard({
   dragListeners,
   dragAttributes,
   isDragging = false,
+  isSelected = false,
+  onSelect,
 }: {
   children: React.ReactNode
   title: string
@@ -74,6 +76,8 @@ function CollapsibleItemCard({
   dragListeners?: DraggableSyntheticListeners
   dragAttributes?: DraggableAttributes
   isDragging?: boolean
+  isSelected?: boolean
+  onSelect?: () => void
 }) {
   const [isOpen, setIsOpen] = useState(true)
 
@@ -82,16 +86,22 @@ function CollapsibleItemCard({
       ref={containerRef}
       style={containerStyle}
       className={cn(
-        'animate-slide-up rounded-lg border border-[var(--color-hairline)] bg-[var(--surface-canvas)]/60 transition-colors hover:border-[var(--color-hairline-strong)]',
+        'animate-slide-up rounded-lg border bg-[var(--surface-canvas)]/60 transition-colors hover:border-[var(--color-hairline-strong)]',
+        isSelected
+          ? 'border-[var(--color-primary)] ring-2 ring-[color:color-mix(in_srgb,var(--color-primary)_18%,transparent)]'
+          : 'border-[var(--color-hairline)]',
         isDragging && 'opacity-70',
         containerClassName,
       )}
+      onClick={() => onSelect?.()}
     >
       <div className="flex w-full items-center gap-2 px-3 py-2.5">
         <span
           className="inline-flex cursor-grab text-[var(--color-muted-soft)] transition-colors hover:text-[var(--color-muted)]"
           aria-label="Drag to reorder"
           title="Drag to reorder"
+          data-no-section-select
+          onClick={(event) => event.stopPropagation()}
           {...dragListeners}
           {...dragAttributes}
         >
@@ -113,7 +123,11 @@ function CollapsibleItemCard({
           variant="ghost"
           size="icon"
           className="size-6 text-[var(--color-muted)] hover:text-[#cf2d56]"
-          onClick={onDelete}
+          data-no-section-select
+          onClick={(event) => {
+            event.stopPropagation()
+            onDelete()
+          }}
         >
           <Trash2 className="size-3" />
         </Button>
@@ -164,12 +178,16 @@ function ReorderableItemCard({
   title,
   index,
   onDelete,
+  isSelected = false,
+  onSelect,
 }: {
   itemId: string
   children: React.ReactNode
   title: string
   index: number
   onDelete: () => void
+  isSelected?: boolean
+  onSelect?: () => void
 }) {
   const { setNodeRef: setDroppableRef, isOver } = useDroppable({ id: itemId })
   const { attributes, listeners, setNodeRef: setDraggableRef, transform, isDragging } = useDraggable({ id: itemId })
@@ -189,6 +207,8 @@ function ReorderableItemCard({
       containerStyle={style}
       containerClassName={cn(isOver && REORDER_DROP_TARGET_CLASS)}
       isDragging={isDragging}
+      isSelected={isSelected}
+      onSelect={onSelect}
       dragListeners={listeners}
       dragAttributes={attributes}
     >
@@ -584,7 +604,17 @@ function NonAcademicEditor({ page, onChange }: { page: NonAcademicPage; onChange
   )
 }
 
-function CoreEditor({ page, onChange }: { page: CorePage; onChange: (page: CmsPage) => void }) {
+function CoreEditor({
+  page,
+  onChange,
+  selectedCoreSectionId,
+  onCoreSectionFocus,
+}: {
+  page: CorePage
+  onChange: (page: CmsPage) => void
+  selectedCoreSectionId?: string | null
+  onCoreSectionFocus?: (sectionId: string) => void
+}) {
   const sensors = useEditorReorderSensor()
   const updateSection = (sectionId: string, updater: (section: CoreSection) => CoreSection) => {
     onChange({
@@ -639,6 +669,8 @@ function CoreEditor({ page, onChange }: { page: CorePage; onChange: (page: CmsPa
                 itemId={section.id}
                 title={section.title || 'Untitled'}
                 index={index + 1}
+                isSelected={selectedCoreSectionId === section.id}
+                onSelect={() => onCoreSectionFocus?.(section.id)}
                 onDelete={() =>
                 onChange({
                   ...page,
@@ -684,7 +716,17 @@ function CoreEditor({ page, onChange }: { page: CorePage; onChange: (page: CmsPa
   )
 }
 
-export function PageEditor({ page, onChange }: { page: CmsPage; onChange: (page: CmsPage) => void }) {
+export function PageEditor({
+  page,
+  onChange,
+  selectedCoreSectionId,
+  onCoreSectionFocus,
+}: {
+  page: CmsPage
+  onChange: (page: CmsPage) => void
+  selectedCoreSectionId?: string | null
+  onCoreSectionFocus?: (sectionId: string) => void
+}) {
   switch (page.type) {
     case 'program':
       return <ProgramEditor page={page} onChange={onChange} />
@@ -693,6 +735,13 @@ export function PageEditor({ page, onChange }: { page: CmsPage; onChange: (page:
     case 'non-academic':
       return <NonAcademicEditor page={page} onChange={onChange} />
     case 'core':
-      return <CoreEditor page={page} onChange={onChange} />
+      return (
+        <CoreEditor
+          page={page}
+          onChange={onChange}
+          selectedCoreSectionId={selectedCoreSectionId}
+          onCoreSectionFocus={onCoreSectionFocus}
+        />
+      )
   }
 }
