@@ -192,6 +192,7 @@ function SliderSetting({
 const MIN_EDITOR_WIDTH = 280
 const MAX_EDITOR_WIDTH = 560
 const DEFAULT_EDITOR_WIDTH = 360
+const waitForNextPaint = () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
 
 function App() {
   const [pages, setPages] = useState<CmsPage[]>(() => getPages())
@@ -261,6 +262,7 @@ function App() {
   const handleExportPdf = async () => {
     setIsExporting(true)
     try {
+      await waitForNextPaint()
       await exportPdfDocument(renderedPages, documentTitle)
     } finally {
       setIsExporting(false)

@@ -1,6 +1,3 @@
-import { pdf } from '@react-pdf/renderer'
-
-import { PdfDocument } from '@/components/pdf-document'
 import { getRenderedBlockLines } from '@/lib/layout'
 import { downloadFile, slugify } from '@/lib/utils'
 import { PAGE_HEIGHT, PAGE_WIDTH, type RenderedPage } from '@/types/cms'
@@ -27,6 +24,10 @@ function renderSvgBlock(block: RenderedPage['blocks'][number]) {
 }
 
 export async function exportPdfDocument(pages: RenderedPage[], title: string) {
+  const [{ pdf }, { PdfDocument }] = await Promise.all([
+    import('@react-pdf/renderer'),
+    import('@/components/pdf-document'),
+  ])
   const blob = await pdf(<PdfDocument pages={pages} />).toBlob()
   downloadFile(blob, `${slugify(title) || 'college-recognition'}.pdf`)
 }
