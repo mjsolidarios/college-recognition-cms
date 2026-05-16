@@ -3,12 +3,14 @@ import type {
   CmsPage,
   CmsSettings,
   CoreSection,
+  FontPreset,
   NonAcademicEntry,
   ProgramRow,
   RenderTextBlock,
   RenderedPage,
 } from '@/types/cms'
 import { PAGE_HEIGHT, PAGE_WIDTH } from '@/types/cms'
+import { getFontStack } from '@/lib/fonts'
 
 /** Space between title block and first body column (tighter to match print brochure). */
 const TITLE_GAP = 16
@@ -21,7 +23,6 @@ const ITEM_GAP = 2
 const CORE_LIST_INDENT = 14
 /** Indent used when awardee names wrap to multiple lines so continuations stay nested under each award heading. */
 const AWARDEE_LIST_INDENT = 12
-const FONT_FAMILY = 'Georgia, "Times New Roman", serif'
 /** Shrink wrap width slightly so layout reserves at least as many lines as the canvas / PDF renderer. */
 const WRAP_WIDTH_INSET = 10
 
@@ -41,6 +42,7 @@ type TextOptions = {
   idPrefix: string
   text: string
   fontSize: number
+  textRole?: 'heading' | 'body'
   width?: number
   fontWeight?: 'normal' | 'bold'
   fontStyle?: 'normal' | 'italic'
@@ -61,6 +63,7 @@ type TextOptions = {
 }
 
 type MeasureOptions = {
+  fontFamily: FontPreset
   fontSize: number
   fontWeight: 'normal' | 'bold'
   fontStyle?: 'normal' | 'italic'
@@ -69,6 +72,7 @@ type MeasureOptions = {
 }
 
 type ResolvedTextLayout = {
+  fontFamily: FontPreset
   fontSize: number
   lineHeight: number
   blockSpacing: number
@@ -119,6 +123,7 @@ function getPageTitleBlocks(page: CmsPage, settings: CmsSettings, pageNumber: nu
     .flatMap((line) =>
       wrapParagraph(line || ' ', titleWidth, {
         fontSize: titleFontSize,
+        fontFamily: settings.headingFont,
         fontWeight: 'bold',
         letterSpacing: page.type === 'program' ? 1.8 : 0.6,
         uppercase: page.type !== 'core',
@@ -132,6 +137,7 @@ function getPageTitleBlocks(page: CmsPage, settings: CmsSettings, pageNumber: nu
       y: settings.pagePaddingTop,
       width: titleWidth,
       lines: wrappedTitleLines,
+      fontFamily: settings.headingFont,
       fontSize: titleFontSize,
       lineHeight: titleLineHeight,
       fontWeight: 'bold',
@@ -145,10 +151,11 @@ function getPageTitleBlocks(page: CmsPage, settings: CmsSettings, pageNumber: nu
   if (page.type === 'core' && page.content.subheading) {
     const subheadingFontSize = settings.subtitleSize * scale
     const subheadingLineHeight = settings.subtitleSize * 1.12 * scale
-    const wrappedSubheadingLines = wrapText(page.content.subheading, titleWidth, {
-      fontSize: subheadingFontSize,
-      fontWeight: 'normal',
-    })
+      const wrappedSubheadingLines = wrapText(page.content.subheading, titleWidth, {
+        fontFamily: settings.headingFont,
+        fontSize: subheadingFontSize,
+        fontWeight: 'normal',
+      })
 
     blocks.push({
       id: `${page.id}-subtitle-${pageNumber}`,
@@ -157,11 +164,12 @@ function getPageTitleBlocks(page: CmsPage, settings: CmsSettings, pageNumber: nu
         settings.pagePaddingTop +
         blocks[0].lines.length * titleLineHeight +
         Math.round((page.type === 'core' ? 4 : 8) * scale),
-      width: titleWidth,
-      lines: wrappedSubheadingLines,
-      fontSize: subheadingFontSize,
-      lineHeight: subheadingLineHeight,
-      fontWeight: 'normal',
+        width: titleWidth,
+        lines: wrappedSubheadingLines,
+        fontFamily: settings.headingFont,
+        fontSize: subheadingFontSize,
+        lineHeight: subheadingLineHeight,
+        fontWeight: 'normal',
       fontStyle: 'normal',
       align: 'center',
     })
@@ -171,10 +179,11 @@ function getPageTitleBlocks(page: CmsPage, settings: CmsSettings, pageNumber: nu
 }
 
 function createMeasureContext({
+  fontFamily,
   fontSize,
   fontWeight,
   fontStyle = 'normal',
-}: Pick<MeasureOptions, 'fontSize' | 'fontWeight' | 'fontStyle'>) {
+}: Pick<MeasureOptions, 'fontFamily' | 'fontSize' | 'fontWeight' | 'fontStyle'>) {
   if (typeof document === 'undefined') {
     return null
   }
@@ -186,7 +195,7 @@ function createMeasureContext({
     return null
   }
 
-  context.font = `${fontStyle} ${fontWeight} ${fontSize}px ${FONT_FAMILY}`
+  context.font = `${fontStyle} ${fontWeight} ${fontSize}px ${getFontStack(fontFamily)}`
   return context
 }
 
@@ -365,6 +374,7 @@ function resolveTextLayout(context: LayoutContext, options: TextOptions): Resolv
   const fontWeight = options.fontWeight ?? 'normal'
   const fontStyle = options.fontStyle ?? 'normal'
   const align = options.align ?? 'left'
+  const fontFamily = options.textRole === 'heading' ? context.settings.headingFont : context.settings.bodyFont
   const scale = getScale(context.settings)
   const fontSize = options.fontSize * scale
   const full = options.fullWidth === true
@@ -376,6 +386,7 @@ function resolveTextLayout(context: LayoutContext, options: TextOptions): Resolv
   const wrapWidth = full ? rawWidth : Math.max(8, rawWidth - WRAP_WIDTH_INSET)
   const width = rawWidth
   const lines = wrapText(options.text, wrapWidth, {
+    fontFamily,
     fontSize,
     fontWeight,
     fontStyle,
@@ -386,6 +397,7 @@ function resolveTextLayout(context: LayoutContext, options: TextOptions): Resolv
   const blockSpacing = (options.spacingAfter ?? PARAGRAPH_GAP) * scale
 
   return {
+    fontFamily,
     fontSize,
     lineHeight,
     blockSpacing,
@@ -425,6 +437,7 @@ function getEffectiveReserve(contentHeight: number, reserveHeight: number, maxCo
 function addLinesToFlow(context: LayoutContext, options: TextOptions) {
   const resolved = resolveTextLayout(context, options)
   const {
+    fontFamily,
     fontSize,
     lineHeight,
     blockSpacing,
@@ -482,6 +495,7 @@ function addLinesToFlow(context: LayoutContext, options: TextOptions) {
         y: context.currentY[col],
         width,
         lines,
+        fontFamily,
         fontSize,
         lineHeight,
         fontWeight,
@@ -527,6 +541,7 @@ function addLinesToFlow(context: LayoutContext, options: TextOptions) {
       y: context.currentY[col],
       width,
       lines: visibleLines,
+      fontFamily,
       fontSize,
       lineHeight,
       fontWeight,
@@ -563,6 +578,7 @@ function addSectionHeading(
     idPrefix: `section-heading-${index}`,
     text,
     fontSize: context.settings.headingSize,
+    textRole: 'heading',
     fontWeight: 'bold',
     spacingAfter: options?.spacingAfter ?? ITEM_GAP,
     allowSplit: false,
@@ -685,6 +701,7 @@ function renderAcademicPage(context: LayoutContext, entries: AcademicEntry[]) {
       idPrefix: `academic-grade-${gradeIndex}`,
       text: gradeLevel,
       fontSize: context.settings.subtitleSize,
+      textRole: 'heading',
       fontWeight: 'bold',
       spacingAfter: 8,
       allowSplit: false,
@@ -692,9 +709,10 @@ function renderAcademicPage(context: LayoutContext, entries: AcademicEntry[]) {
         context,
         {
           idPrefix: `academic-grade-${gradeIndex}-reserve`,
-          text: [...categories.keys()][0] ?? '',
-          fontSize: context.settings.headingSize,
-          fontWeight: 'bold',
+            text: [...categories.keys()][0] ?? '',
+            fontSize: context.settings.headingSize,
+            textRole: 'heading',
+            fontWeight: 'bold',
         },
         1,
         true,
@@ -707,6 +725,7 @@ function renderAcademicPage(context: LayoutContext, entries: AcademicEntry[]) {
         idPrefix: `academic-category-${gradeIndex}-${categoryIndex}`,
         text: category,
         fontSize: context.settings.headingSize,
+        textRole: 'heading',
         fontWeight: 'bold',
         spacingAfter: 8,
         allowSplit: false,
@@ -768,9 +787,10 @@ function renderNonAcademicPage(context: LayoutContext, entries: NonAcademicEntry
   for (const [category, groupedEntries] of groupNonAcademicEntries(entries).entries()) {
     addLinesToFlow(context, {
       idPrefix: `nonacademic-category-${categoryIndex}`,
-      text: category,
-      fontSize: context.settings.headingSize,
-      fontWeight: 'bold',
+        text: category,
+        fontSize: context.settings.headingSize,
+        textRole: 'heading',
+        fontWeight: 'bold',
       spacingAfter: 10,
       allowSplit: false,
       reserveHeight:
@@ -844,6 +864,7 @@ function renderProgramPage(context: LayoutContext, rows: ProgramRow[]) {
         idPrefix: `program-left-title-${index}-reserve`,
         text: row.leftTitle,
         fontSize: context.settings.bodySize,
+        textRole: 'heading',
         fontWeight: 'bold',
         spacingAfter: 1,
         pinColumn: 0,
@@ -857,6 +878,7 @@ function renderProgramPage(context: LayoutContext, rows: ProgramRow[]) {
         idPrefix: `program-right-title-${index}-reserve`,
         text: row.rightTitle ?? '',
         fontSize: context.settings.bodySize,
+        textRole: 'heading',
         fontWeight: 'bold',
         spacingAfter: 1,
         pinColumn: 1,
@@ -881,6 +903,7 @@ function renderProgramPage(context: LayoutContext, rows: ProgramRow[]) {
       idPrefix: `program-left-title-${index}`,
       text: row.leftTitle,
       fontSize: context.settings.bodySize,
+      textRole: 'heading',
       fontWeight: 'bold',
       spacingAfter: 1,
       allowSplit: false,
@@ -903,6 +926,7 @@ function renderProgramPage(context: LayoutContext, rows: ProgramRow[]) {
       idPrefix: `program-right-title-${index}`,
       text: row.rightTitle ?? '',
       fontSize: context.settings.bodySize,
+      textRole: 'heading',
       fontWeight: 'bold',
       spacingAfter: 1,
       allowSplit: false,
@@ -934,6 +958,7 @@ function appendPageNumbers(renderedPages: RenderedPage[], settings: CmsSettings)
       y: PAGE_HEIGHT - settings.pagePaddingBottom + 6 * scale,
       width: PAGE_WIDTH - settings.pagePaddingX * 2,
       lines: [String(index + 1)],
+      fontFamily: settings.bodyFont,
       fontSize: settings.pageNumberSize * scale,
       lineHeight: settings.pageNumberSize * 1.1 * scale,
       fontWeight: 'normal',

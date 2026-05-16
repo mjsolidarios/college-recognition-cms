@@ -2,6 +2,7 @@ export const PAGE_WIDTH = 600
 export const PAGE_HEIGHT = 888
 
 export type PageType = 'program' | 'academic' | 'non-academic' | 'core'
+export type FontPreset = 'times' | 'helvetica'
 
 export interface ProgramRow {
   id: string
@@ -80,6 +81,8 @@ export interface CmsSettings {
   subtitleSize: number
   headingSize: number
   bodySize: number
+  headingFont: FontPreset
+  bodyFont: FontPreset
   metaSize: number
   pageNumberSize: number
   pagePaddingTop: number
@@ -97,6 +100,7 @@ export interface RenderTextBlock {
   y: number
   width: number
   lines: string[]
+  fontFamily: FontPreset
   fontSize: number
   lineHeight: number
   fontWeight: 'normal' | 'bold'

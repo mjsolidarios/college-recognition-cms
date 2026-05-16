@@ -6,6 +6,8 @@ export const defaultSettings: CmsSettings = {
   subtitleSize: 12,
   headingSize: 12,
   bodySize: 11.5,
+  headingFont: 'helvetica',
+  bodyFont: 'times',
   metaSize: 10.75,
   pageNumberSize: 10,
   pagePaddingTop: 36,

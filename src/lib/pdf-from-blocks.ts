@@ -47,7 +47,7 @@ function drawBlock(doc: jsPDF, block: RenderTextBlock) {
     return
   }
 
-  doc.setFont('times', pdfFontStyle(block))
+  doc.setFont(block.fontFamily, pdfFontStyle(block))
   doc.setFontSize(block.fontSize)
   doc.setTextColor(38, 37, 30)
 
@@ -83,7 +83,7 @@ export async function renderPdfBlob(
     return doc.output('blob')
   }
 
-  let doc = new jsPDF(PDF_DOC_OPTIONS)
+  const doc = new jsPDF(PDF_DOC_OPTIONS)
   drawPage(doc, pages[0]!)
   onPage?.(0, total)
 
