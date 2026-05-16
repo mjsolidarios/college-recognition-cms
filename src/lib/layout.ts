@@ -13,7 +13,7 @@ import { PAGE_HEIGHT, PAGE_WIDTH } from '@/types/cms'
 /** Space between title block and first body column (tighter to match print brochure). */
 const TITLE_GAP = 16
 /** Tighter gutter under the program page heading — more rows fit above the fold. */
-const TITLE_GAP_PROGRAM = 10
+const TITLE_GAP_PROGRAM = 6
 const SECTION_GAP = 11
 const PARAGRAPH_GAP = 6
 const ITEM_GAP = 2
@@ -598,10 +598,10 @@ function renderNonAcademicPage(context: LayoutContext, entries: NonAcademicEntry
 
 function renderProgramPage(context: LayoutContext, rows: ProgramRow[]) {
   /**
-   * Trailing gutter after left/right bodies — ~two body lines (scaled with globalScale later).
-   * Row pairing still uses max(Y) banding so very tall LEFT cells widen RIGHT gaps.
+   * Trailing gutter after each cell (~one body line: scales with typography).
+   * Row bands still advance with max(Y)—uneven LEFT still adds slack versus RIGHT until content is tightened.
    */
-  const afterBodySpacing = 2 * context.settings.bodySize * context.settings.lineHeight
+  const afterBodySpacing = context.settings.bodySize * context.settings.lineHeight
 
   rows.forEach((row, index) => {
     const rowTop = Math.max(context.currentY[0], context.currentY[1])

@@ -85,14 +85,15 @@ export const seedPages: CmsPage[] = [
         {
           id: 'program-2',
           leftTitle: 'Entrance of Colors',
-          leftBody: 'Von Ashley P. Chichirita\nKyla B. Bearneza\nDr. Ma. Beth S. Concepcion\nDean, CICT',
+          leftBody:
+            'Von Ashley P. Chichirita • Kyla B. Bearneza • Dr. Ma. Beth S. Concepcion • Dean, CICT',
           rightTitle: 'Presentation of Non-Academic Awards',
           rightBody: 'to be awarded by\nDr. Ma. Beth S. Concepcion\nDean, CICT',
         },
         {
           id: 'program-3',
           leftTitle: 'Philippine National Anthem (AVP)',
-          leftBody: 'Invocation (AVP)\nOpening Remarks\nDr. Ma. Beth S. Concepcion\nDean, CICT',
+          leftBody: 'Invocation (AVP) • Opening Remarks • Dr. Ma. Beth S. Concepcion • Dean, CICT',
           rightTitle: 'Intermission Number',
           rightBody: 'to be assisted by\nDr. Ma. Pilar S. Malata\nDean of Students, OSA',
         },
@@ -106,21 +107,22 @@ export const seedPages: CmsPage[] = [
         {
           id: 'program-5',
           leftTitle: 'Introduction of the Guest Speaker',
-          leftBody: 'Mr. Neiljan C. Raborar\nCollege Secretary, CICT\nCo-chair, CICT Parangal',
+          leftBody: 'Mr. Neiljan C. Raborar • College Secretary, CICT • Co-chair, CICT Parangal',
           rightTitle: 'Inspirational Message',
           rightBody: 'PLt. Wallen Mae DS Arancillo\nSpokesperson, PNP Anti-Cybercrime Group\n(BSIS Batch 2012)',
         },
         {
           id: 'program-6',
           leftTitle: 'Awarding of Certificate of Recognition for Meritorious Service',
-          leftBody: 'Dr. Joel T. De Castro\nDean, October 1, 2011 - February 14, 2020\nDr. Ma. Beth S. Concepcion\nDean, CICT',
+          leftBody:
+            'Dr. Joel T. De Castro (Dean, Oct 1, 2011 – Feb 14, 2020) • Dr. Ma. Beth S. Concepcion • Dean, CICT',
           rightTitle: 'Message',
           rightBody: 'Kyla B. Bearneza\nDean\'s Medal of Excellence Awardee\nMost Outstanding CICT Graduate in Academics',
         },
         {
           id: 'program-7',
           leftTitle: 'Curriculum Video',
-          leftBody: 'Closing Message\nDr. Ralph Voltaire J. Dayot\nChair, CICT Parangal',
+          leftBody: 'Closing Message • Dr. Ralph Voltaire J. Dayot • Chair, CICT Parangal',
           rightTitle: 'Intermission Number',
           rightBody: 'John Daxen I. Occeño\nBSIT 4B',
         },
