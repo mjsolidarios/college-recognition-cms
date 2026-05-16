@@ -4,20 +4,20 @@ import { cva, type VariantProps } from 'class-variance-authority'
 import { cn } from '@/lib/utils'
 
 const buttonVariants = cva(
-  'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg text-sm font-medium transition-all duration-200 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 cursor-pointer',
+  'inline-flex h-10 items-center justify-center gap-2 whitespace-nowrap rounded-md px-4 text-sm font-medium text-[var(--color-ink)] transition-colors duration-200 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:color-mix(in_srgb,var(--color-primary)_28%,transparent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--surface-page)] disabled:pointer-events-none disabled:opacity-50 cursor-pointer',
   {
     variants: {
       variant: {
-        default: 'bg-indigo-600 text-white shadow-sm shadow-indigo-600/20 hover:bg-indigo-500 hover:shadow-md hover:shadow-indigo-600/25 active:bg-indigo-700',
-        secondary: 'bg-stone-200 text-stone-900 hover:bg-stone-300 active:bg-stone-200',
-        outline: 'border border-stone-200 bg-white text-stone-700 shadow-sm hover:bg-stone-50 hover:border-stone-300 hover:text-stone-900 active:bg-stone-100',
-        ghost: 'text-stone-600 hover:bg-stone-100 hover:text-stone-900',
-        destructive: 'bg-red-600 text-white shadow-sm hover:bg-red-500 active:bg-red-700',
-        accent: 'bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100 hover:border-indigo-300 active:bg-indigo-50',
+        default: 'border border-[var(--color-primary)] bg-[var(--color-primary)] text-white hover:bg-[var(--color-primary-active)] hover:border-[var(--color-primary-active)] active:bg-[var(--color-primary-active)]',
+        secondary: 'border border-[var(--color-hairline-strong)] bg-white hover:bg-[var(--surface-canvas)] active:bg-[var(--surface-strong)]',
+        outline: 'border border-[var(--color-hairline)] bg-white text-[var(--color-body)] hover:border-[var(--color-hairline-strong)] hover:text-[var(--color-ink)] hover:bg-[var(--surface-canvas)] active:bg-[var(--surface-strong)]',
+        ghost: 'border border-transparent text-[var(--color-muted)] hover:bg-[var(--surface-canvas)] hover:text-[var(--color-ink)]',
+        destructive: 'border border-[#cf2d56] bg-[#cf2d56] text-white hover:bg-[#b9264b] hover:border-[#b9264b] active:bg-[#a51f43]',
+        accent: 'border border-[var(--color-hairline)] bg-[var(--surface-canvas)] text-[var(--color-body)] hover:border-[var(--color-hairline-strong)] hover:text-[var(--color-ink)]',
       },
       size: {
-        default: 'h-9 px-4 py-2',
-        sm: 'h-8 rounded-md px-3 text-xs',
+        default: 'h-10 px-4',
+        sm: 'h-9 rounded-md px-3 text-xs',
         lg: 'h-11 rounded-lg px-6',
         icon: 'size-9',
       },
@@ -38,4 +38,4 @@ function Button({
   return <button className={cn(buttonVariants({ variant, size, className }))} {...props} />
 }
 
-export { Button, buttonVariants }
+export { Button }

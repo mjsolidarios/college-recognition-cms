@@ -27,14 +27,14 @@ import type {
 } from '@/types/cms'
 
 const TYPE_COLORS: Record<string, string> = {
-  core: 'bg-indigo-500',
-  program: 'bg-amber-500',
-  academic: 'bg-emerald-500',
-  'non-academic': 'bg-rose-500',
+  core: 'bg-[rgb(var(--type-core))]',
+  program: 'bg-[rgb(var(--type-program))]',
+  academic: 'bg-[rgb(var(--type-academic))]',
+  'non-academic': 'bg-[rgb(var(--type-non-academic))]',
 }
 
 function SectionLabel({ children }: { children: string }) {
-  return <label className="text-[11px] font-semibold uppercase tracking-[0.14em] text-stone-400">{children}</label>
+  return <label className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--color-muted)]">{children}</label>
 }
 
 function CollapsibleItemCard({
@@ -51,21 +51,21 @@ function CollapsibleItemCard({
   const [isOpen, setIsOpen] = useState(true)
 
   return (
-    <div className="animate-slide-up rounded-lg border border-stone-200/80 bg-stone-50/50 transition-colors hover:border-stone-300/60">
+    <div className="animate-slide-up rounded-lg border border-[var(--color-hairline)] bg-[var(--surface-canvas)]/60 transition-colors hover:border-[var(--color-hairline-strong)]">
       <button
         type="button"
         className="flex w-full items-center gap-2 px-3 py-2.5 text-left cursor-pointer"
         onClick={() => setIsOpen(!isOpen)}
       >
-        <span className="flex size-5 items-center justify-center rounded bg-stone-200/80 text-[10px] font-bold tabular-nums text-stone-500">
+        <span className="flex size-5 items-center justify-center rounded bg-[var(--surface-strong)] text-[10px] font-bold tabular-nums text-[var(--color-muted)]">
           {index}
         </span>
-        <span className="flex-1 truncate text-xs font-semibold text-stone-700">{title}</span>
+        <span className="flex-1 truncate text-xs font-semibold text-[var(--color-body)]">{title}</span>
         <Button
           type="button"
           variant="ghost"
           size="icon"
-          className="size-6 text-stone-400 hover:text-red-500"
+          className="size-6 text-[var(--color-muted)] hover:text-[#cf2d56]"
           onClick={(event) => {
             event.stopPropagation()
             onDelete()
@@ -73,10 +73,10 @@ function CollapsibleItemCard({
         >
           <Trash2 className="size-3" />
         </Button>
-        <ChevronDown className={cn('size-3.5 text-stone-400 transition-transform duration-200', isOpen && 'rotate-180')} />
+        <ChevronDown className={cn('size-3.5 text-[var(--color-muted)] transition-transform duration-200', isOpen && 'rotate-180')} />
       </button>
       {isOpen && (
-        <div className="animate-fade-in space-y-3 border-t border-stone-200/60 px-3 pb-3 pt-3">
+        <div className="animate-fade-in space-y-3 border-t border-[var(--color-hairline)] px-3 pb-3 pt-3">
           {children}
         </div>
       )}
@@ -89,7 +89,7 @@ function AddButton({ children, onClick }: { children: React.ReactNode; onClick: 
     <button
       type="button"
       onClick={onClick}
-      className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-stone-300 px-3 py-2.5 text-xs font-medium text-stone-500 transition-all duration-200 hover:border-indigo-300 hover:bg-indigo-50/50 hover:text-indigo-600 cursor-pointer"
+      className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-[var(--color-hairline-strong)] px-3 py-2.5 text-xs font-medium text-[var(--color-muted)] transition-colors duration-200 hover:border-[var(--color-primary)] hover:bg-[color:color-mix(in_srgb,var(--color-primary)_8%,white)] hover:text-[var(--color-primary)] cursor-pointer"
     >
       <Plus className="size-3.5" />
       {children}
@@ -103,20 +103,20 @@ function updateItem<T extends { id: string }>(items: T[], itemId: string, update
 
 function EditorChrome({ page, children }: { page: CmsPage; children: React.ReactNode }) {
   return (
-    <div className="flex h-full flex-col rounded-xl border border-stone-200/80 bg-white shadow-sm">
+    <div className="flex h-full flex-col rounded-xl border border-[var(--color-hairline)] bg-white">
       {/* Type color bar */}
       <div className={cn('h-1 rounded-t-xl', TYPE_COLORS[page.type])} />
 
       <div className="flex flex-col gap-1 p-4 pb-2">
-        <h3 className="text-sm font-semibold text-stone-900">Editor</h3>
-        <p className="text-xs text-stone-400">Update content and structure for the selected page.</p>
+        <h3 className="text-sm font-semibold text-[var(--color-ink)]">Editor</h3>
+        <p className="text-xs text-[var(--color-muted)]">Update content and structure for the selected page.</p>
       </div>
 
       <div className="space-y-4 p-4 pt-2">
         <div className="grid gap-3 md:grid-cols-2">
           <div className="space-y-1.5 md:col-span-2">
             <SectionLabel>Page title</SectionLabel>
-            <Input value={page.title} readOnly className="bg-stone-50 text-stone-500" />
+            <Input value={page.title} readOnly className="bg-[var(--surface-canvas)] text-[var(--color-muted)]" />
           </div>
           <div className="space-y-1.5">
             <SectionLabel>Page type</SectionLabel>
@@ -131,7 +131,7 @@ function EditorChrome({ page, children }: { page: CmsPage; children: React.React
           </div>
           <div className="space-y-1.5">
             <SectionLabel>Order</SectionLabel>
-            <Input value={String(page.order + 1)} readOnly className="bg-stone-50 text-stone-500" />
+            <Input value={String(page.order + 1)} readOnly className="bg-[var(--surface-canvas)] text-[var(--color-muted)]" />
           </div>
         </div>
         {children}
@@ -166,8 +166,8 @@ function ProgramEditor({ page, onChange }: { page: ProgramPage; onChange: (page:
         </div>
 
         <div className="flex items-center gap-2 pt-1">
-          <span className="text-xs font-semibold text-stone-500">{page.content.rows.length} row{page.content.rows.length !== 1 ? 's' : ''}</span>
-          <div className="h-px flex-1 bg-stone-200" />
+          <span className="text-xs font-semibold text-[var(--color-muted)]">{page.content.rows.length} row{page.content.rows.length !== 1 ? 's' : ''}</span>
+          <div className="h-px flex-1 bg-[var(--color-hairline)]" />
         </div>
 
         <div className="space-y-2">
@@ -258,8 +258,8 @@ function AcademicEditor({ page, onChange }: { page: AcademicPage; onChange: (pag
         </div>
 
         <div className="flex items-center gap-2 pt-1">
-          <span className="text-xs font-semibold text-stone-500">{page.content.entries.length} awardee{page.content.entries.length !== 1 ? 's' : ''}</span>
-          <div className="h-px flex-1 bg-stone-200" />
+          <span className="text-xs font-semibold text-[var(--color-muted)]">{page.content.entries.length} awardee{page.content.entries.length !== 1 ? 's' : ''}</span>
+          <div className="h-px flex-1 bg-[var(--color-hairline)]" />
         </div>
 
         <div className="space-y-2">
@@ -357,8 +357,8 @@ function NonAcademicEditor({ page, onChange }: { page: NonAcademicPage; onChange
         </div>
 
         <div className="flex items-center gap-2 pt-1">
-          <span className="text-xs font-semibold text-stone-500">{page.content.entries.length} award{page.content.entries.length !== 1 ? 's' : ''}</span>
-          <div className="h-px flex-1 bg-stone-200" />
+          <span className="text-xs font-semibold text-[var(--color-muted)]">{page.content.entries.length} award{page.content.entries.length !== 1 ? 's' : ''}</span>
+          <div className="h-px flex-1 bg-[var(--color-hairline)]" />
         </div>
 
         <div className="space-y-2">
@@ -455,8 +455,8 @@ function CoreEditor({ page, onChange }: { page: CorePage; onChange: (page: CmsPa
         </div>
 
         <div className="flex items-center gap-2 pt-1">
-          <span className="text-xs font-semibold text-stone-500">{page.content.sections.length} section{page.content.sections.length !== 1 ? 's' : ''}</span>
-          <div className="h-px flex-1 bg-stone-200" />
+          <span className="text-xs font-semibold text-[var(--color-muted)]">{page.content.sections.length} section{page.content.sections.length !== 1 ? 's' : ''}</span>
+          <div className="h-px flex-1 bg-[var(--color-hairline)]" />
         </div>
 
         <div className="space-y-2">
