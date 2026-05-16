@@ -1,5 +1,5 @@
 import { BookOpen, ChevronDown, Download, FileImage, FileText, GripVertical, LayoutGrid, Pencil, RefreshCw } from 'lucide-react'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
 
 import { CanvasPreview } from '@/components/canvas-preview'
 import { ExportDialog, ImportDialog } from '@/components/import-export-dialog'
@@ -211,10 +211,6 @@ function App() {
   )
 
   const renderedPages = useMemo(() => renderDocument(pages, settings), [pages, settings])
-
-  useEffect(() => {
-    setPreviewPageIndex((i) => (renderedPages.length === 0 ? 0 : Math.min(i, renderedPages.length - 1)))
-  }, [renderedPages.length])
 
   const persistPages = (nextPages: CmsPage[]) => {
     const orderedPages = [...nextPages].sort((left, right) => left.order - right.order)
