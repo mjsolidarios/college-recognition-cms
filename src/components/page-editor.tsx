@@ -13,7 +13,7 @@ import {
 import { ChevronDown, GripVertical, Plus, Trash2 } from 'lucide-react'
 
 import { BulkAddAcademicDialog, BulkAddNonAcademicDialog } from '@/components/bulk-add-dialog'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -80,10 +80,24 @@ function CollapsibleItemCard({
   onSelect?: () => void
 }) {
   const [isOpen, setIsOpen] = useState(true)
+  const rootRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!isSelected) {
+      return
+    }
+    setIsOpen(true)
+    rootRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+  }, [isSelected])
 
   return (
     <div
-      ref={containerRef}
+      ref={(node) => {
+        rootRef.current = node
+        if (containerRef) {
+          containerRef(node)
+        }
+      }}
       style={containerStyle}
       className={cn(
         'animate-slide-up rounded-lg border bg-[var(--surface-canvas)]/60 transition-colors hover:border-[var(--color-hairline-strong)]',
@@ -263,7 +277,17 @@ function EditorChrome({ page, children }: { page: CmsPage; children: React.React
   )
 }
 
-function ProgramEditor({ page, onChange }: { page: ProgramPage; onChange: (page: CmsPage) => void }) {
+function ProgramEditor({
+  page,
+  onChange,
+  selectedLayoutItemId,
+  onLayoutItemSelect,
+}: {
+  page: ProgramPage
+  onChange: (page: CmsPage) => void
+  selectedLayoutItemId?: string | null
+  onLayoutItemSelect?: (itemId: string) => void
+}) {
   const sensors = useEditorReorderSensor()
   const updateRow = (rowId: string, updater: (row: ProgramRow) => ProgramRow) => {
     onChange({
@@ -316,6 +340,8 @@ function ProgramEditor({ page, onChange }: { page: ProgramPage; onChange: (page:
                 itemId={row.id}
                 title={row.leftTitle || 'Untitled row'}
                 index={index + 1}
+                isSelected={selectedLayoutItemId === row.id}
+                onSelect={() => onLayoutItemSelect?.(row.id)}
                 onDelete={() =>
                 onChange({
                   ...page,
@@ -375,7 +401,17 @@ function ProgramEditor({ page, onChange }: { page: ProgramPage; onChange: (page:
   )
 }
 
-function AcademicEditor({ page, onChange }: { page: AcademicPage; onChange: (page: CmsPage) => void }) {
+function AcademicEditor({
+  page,
+  onChange,
+  selectedLayoutItemId,
+  onLayoutItemSelect,
+}: {
+  page: AcademicPage
+  onChange: (page: CmsPage) => void
+  selectedLayoutItemId?: string | null
+  onLayoutItemSelect?: (itemId: string) => void
+}) {
   const sensors = useEditorReorderSensor()
   const updateEntry = (entryId: string, updater: (entry: AcademicEntry) => AcademicEntry) => {
     onChange({
@@ -426,6 +462,8 @@ function AcademicEditor({ page, onChange }: { page: AcademicPage; onChange: (pag
                 itemId={entry.id}
                 title={entry.name || 'Untitled'}
                 index={index + 1}
+                isSelected={selectedLayoutItemId === entry.id}
+                onSelect={() => onLayoutItemSelect?.(entry.id)}
                 onDelete={() =>
                 onChange({
                   ...page,
@@ -492,7 +530,17 @@ function AcademicEditor({ page, onChange }: { page: AcademicPage; onChange: (pag
   )
 }
 
-function NonAcademicEditor({ page, onChange }: { page: NonAcademicPage; onChange: (page: CmsPage) => void }) {
+function NonAcademicEditor({
+  page,
+  onChange,
+  selectedLayoutItemId,
+  onLayoutItemSelect,
+}: {
+  page: NonAcademicPage
+  onChange: (page: CmsPage) => void
+  selectedLayoutItemId?: string | null
+  onLayoutItemSelect?: (itemId: string) => void
+}) {
   const sensors = useEditorReorderSensor()
   const updateEntry = (entryId: string, updater: (entry: NonAcademicEntry) => NonAcademicEntry) => {
     onChange({
@@ -543,6 +591,8 @@ function NonAcademicEditor({ page, onChange }: { page: NonAcademicPage; onChange
                 itemId={entry.id}
                 title={entry.name || 'Untitled'}
                 index={index + 1}
+                isSelected={selectedLayoutItemId === entry.id}
+                onSelect={() => onLayoutItemSelect?.(entry.id)}
                 onDelete={() =>
                 onChange({
                   ...page,
@@ -607,13 +657,13 @@ function NonAcademicEditor({ page, onChange }: { page: NonAcademicPage; onChange
 function CoreEditor({
   page,
   onChange,
-  selectedCoreSectionId,
-  onCoreSectionFocus,
+  selectedLayoutItemId,
+  onLayoutItemSelect,
 }: {
   page: CorePage
   onChange: (page: CmsPage) => void
-  selectedCoreSectionId?: string | null
-  onCoreSectionFocus?: (sectionId: string) => void
+  selectedLayoutItemId?: string | null
+  onLayoutItemSelect?: (itemId: string) => void
 }) {
   const sensors = useEditorReorderSensor()
   const updateSection = (sectionId: string, updater: (section: CoreSection) => CoreSection) => {
@@ -669,8 +719,8 @@ function CoreEditor({
                 itemId={section.id}
                 title={section.title || 'Untitled'}
                 index={index + 1}
-                isSelected={selectedCoreSectionId === section.id}
-                onSelect={() => onCoreSectionFocus?.(section.id)}
+                isSelected={selectedLayoutItemId === section.id}
+                onSelect={() => onLayoutItemSelect?.(section.id)}
                 onDelete={() =>
                 onChange({
                   ...page,
@@ -719,28 +769,49 @@ function CoreEditor({
 export function PageEditor({
   page,
   onChange,
-  selectedCoreSectionId,
-  onCoreSectionFocus,
+  selectedLayoutItemId,
+  onLayoutItemSelect,
 }: {
   page: CmsPage
   onChange: (page: CmsPage) => void
-  selectedCoreSectionId?: string | null
-  onCoreSectionFocus?: (sectionId: string) => void
+  selectedLayoutItemId?: string | null
+  onLayoutItemSelect?: (itemId: string) => void
 }) {
   switch (page.type) {
     case 'program':
-      return <ProgramEditor page={page} onChange={onChange} />
+      return (
+        <ProgramEditor
+          page={page}
+          onChange={onChange}
+          selectedLayoutItemId={selectedLayoutItemId}
+          onLayoutItemSelect={onLayoutItemSelect}
+        />
+      )
     case 'academic':
-      return <AcademicEditor page={page} onChange={onChange} />
+      return (
+        <AcademicEditor
+          page={page}
+          onChange={onChange}
+          selectedLayoutItemId={selectedLayoutItemId}
+          onLayoutItemSelect={onLayoutItemSelect}
+        />
+      )
     case 'non-academic':
-      return <NonAcademicEditor page={page} onChange={onChange} />
+      return (
+        <NonAcademicEditor
+          page={page}
+          onChange={onChange}
+          selectedLayoutItemId={selectedLayoutItemId}
+          onLayoutItemSelect={onLayoutItemSelect}
+        />
+      )
     case 'core':
       return (
         <CoreEditor
           page={page}
           onChange={onChange}
-          selectedCoreSectionId={selectedCoreSectionId}
-          onCoreSectionFocus={onCoreSectionFocus}
+          selectedLayoutItemId={selectedLayoutItemId}
+          onLayoutItemSelect={onLayoutItemSelect}
         />
       )
   }

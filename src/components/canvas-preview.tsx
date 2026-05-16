@@ -2,6 +2,11 @@ import { ChevronLeft, ChevronRight, Minus, Plus, Redo2, Undo2 } from 'lucide-rea
 import { useEffect, useMemo, useRef, useState } from 'react'
 
 import { Button } from '@/components/ui/button'
+import {
+  buildLayoutItemOverlays,
+  buildLayoutItemStartFlowMap,
+  placementFromFlow,
+} from '@/lib/canvas-layout-items'
 import { getFontStack } from '@/lib/fonts'
 import { FLOW_POSITION_SNAP_INCREMENT, snapFlowPosition } from '@/lib/flow-position'
 import { getRenderedBlockLines } from '@/lib/layout'
@@ -10,8 +15,6 @@ import { PAGE_HEIGHT, PAGE_WIDTH, type RenderedPage } from '@/types/cms'
 
 const RULER_SIZE = 24
 const RULER_FONT = `7.5px 'JetBrains Mono', 'Fira Code', monospace`
-const PAGE_CENTER_X = PAGE_WIDTH / 2
-
 function releasePointerCaptureIfHeld(target: EventTarget | null, pointerId: number) {
   if (!(target instanceof Element) || !target.hasPointerCapture(pointerId)) {
     return
@@ -22,37 +25,6 @@ function releasePointerCaptureIfHeld(target: EventTarget | null, pointerId: numb
 /** DOM height required to show all precomputed lines for a text block at the current zoom level. */
 function getBlockPreviewHeight(block: RenderedPage['blocks'][number], zoom: number) {
   return block.lines.length * block.lineHeight * zoom
-}
-
-function clampNumber(value: number, min: number, max: number) {
-  return Math.min(max, Math.max(min, value))
-}
-
-function inferColumnFromHorizontalBounds(left: number, right: number): 0 | 1 {
-  return ((left + right) / 2 >= PAGE_CENTER_X ? 1 : 0) as 0 | 1
-}
-
-function flowFromPlacement(
-  localPageIndex: number,
-  column: 0 | 1,
-  y: number,
-  contentTop: number,
-  maxContentY: number,
-) {
-  const columnHeight = Math.max(1, maxContentY - contentTop)
-  const yInColumn = clampNumber(y - contentTop, 0, columnHeight)
-  return localPageIndex * columnHeight * 2 + column * columnHeight + yInColumn
-}
-
-function placementFromFlow(flowPosition: number, contentTop: number, maxContentY: number) {
-  const columnHeight = Math.max(1, maxContentY - contentTop)
-  const safeFlow = Math.max(0, flowPosition)
-  const pageSpan = columnHeight * 2
-  const localPageIndex = Math.floor(safeFlow / pageSpan)
-  const withinPage = safeFlow - localPageIndex * pageSpan
-  const column = (withinPage >= columnHeight ? 1 : 0) as 0 | 1
-  const y = contentTop + withinPage - (column === 1 ? columnHeight : 0)
-  return { localPageIndex, column, y }
 }
 
 function HorizontalRuler({ zoom, panX, maxVal }: { zoom: number; panX: number; maxVal: number }) {
@@ -209,8 +181,9 @@ export function CanvasPreview({
   onPreviewPageChange,
   frontCover,
   backCover,
-  onCoreSectionReposition,
-  focusedCoreSection,
+  onLayoutItemReposition,
+  focusedLayoutItem,
+  onLayoutItemSelect,
   onUndoSectionFlow,
   onRedoSectionFlow,
   canUndoSectionFlow = false,
@@ -221,8 +194,9 @@ export function CanvasPreview({
   onPreviewPageChange: (index: number) => void
   frontCover?: string | null
   backCover?: string | null
-  onCoreSectionReposition?: (pageId: string, sectionId: string, flowPosition: number) => void
-  focusedCoreSection?: { pageId: string; sectionId: string } | null
+  onLayoutItemReposition?: (pageId: string, itemId: string, flowPosition: number) => void
+  focusedLayoutItem?: { pageId: string; itemId: string } | null
+  onLayoutItemSelect?: (itemId: string) => void
   onUndoSectionFlow?: () => void
   onRedoSectionFlow?: () => void
   canUndoSectionFlow?: boolean
@@ -232,9 +206,9 @@ export function CanvasPreview({
   const [pan, setPan] = useState({ x: 100, y: 50 })
   const [isSpaceDown, setIsSpaceDown] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
-  const [sectionDrag, setSectionDrag] = useState<{
+  const [itemDrag, setItemDrag] = useState<{
     pageId: string
-    sectionId: string
+    itemId: string
     pointerId: number
     startClientY: number
     startFlow: number
@@ -259,76 +233,26 @@ export function CanvasPreview({
   const safeIdx = Math.min(previewPageIndex, Math.max(0, totalSlots - 1))
   const currentSlot = displaySlots[safeIdx]
 
-  const coreSectionStartFlowById = useMemo(() => {
-    const startById = new Map<string, number>()
-    if (!currentSlot || currentSlot.kind !== 'page' || currentSlot.page.sourcePageType !== 'core') {
-      return startById
+  const layoutItemStartFlowById = useMemo(() => {
+    if (!currentSlot || currentSlot.kind !== 'page') {
+      return new Map<string, number>()
     }
-
-    const sourcePageId = currentSlot.page.sourcePageId
-    for (const renderedPage of renderedPages) {
-      if (renderedPage.sourcePageType !== 'core' || renderedPage.sourcePageId !== sourcePageId) {
-        continue
-      }
-      for (const block of renderedPage.blocks) {
-        if (!block.sectionId) {
-          continue
-        }
-        const column = inferColumnFromHorizontalBounds(block.x, block.x + block.width)
-        const flow = flowFromPlacement(
-          renderedPage.sourcePageLocalIndex,
-          column,
-          block.y,
-          renderedPage.contentTop,
-          renderedPage.maxContentY,
-        )
-        const currentStart = startById.get(block.sectionId)
-        if (currentStart === undefined || flow < currentStart) {
-          startById.set(block.sectionId, flow)
-        }
-      }
-    }
-
-    return startById
+    return buildLayoutItemStartFlowMap(renderedPages, currentSlot.page.sourcePageId)
   }, [currentSlot, renderedPages])
 
-  const coreSectionOverlays = useMemo(() => {
-    if (!currentSlot || currentSlot.kind !== 'page' || currentSlot.page.sourcePageType !== 'core') {
+  const layoutItemOverlays = useMemo(() => {
+    if (!currentSlot || currentSlot.kind !== 'page') {
       return []
     }
-    const grouped = new Map<string, { sectionId: string; column: 0 | 1; blocks: RenderedPage['blocks'] }>()
-    for (const block of currentSlot.page.blocks) {
-      if (!block.sectionId) continue
-      const column = inferColumnFromHorizontalBounds(block.x, block.x + block.width)
-      const key = `${block.sectionId}:${column}`
-      const entry = grouped.get(key) ?? { sectionId: block.sectionId, column, blocks: [] }
-      entry.blocks.push(block)
-      grouped.set(key, entry)
-    }
-    return [...grouped.values()].map(({ sectionId, column, blocks }) => {
-      const left = Math.min(...blocks.map((b) => b.x))
-      const top = Math.min(...blocks.map((b) => b.y))
-      const right = Math.max(...blocks.map((b) => b.x + b.width))
-      const bottom = Math.max(...blocks.map((b) => b.y + b.lines.length * b.lineHeight))
-      const fallbackFlow = flowFromPlacement(
-        currentSlot.page.sourcePageLocalIndex,
-        column,
-        top,
-        currentSlot.page.contentTop,
-        currentSlot.page.maxContentY,
-      )
-      const flowPosition = coreSectionStartFlowById.get(sectionId) ?? fallbackFlow
-      return {
-        id: `${sectionId}-${column}`,
-        sectionId,
-        left,
-        top,
-        width: Math.max(8, right - left),
-        height: Math.max(8, bottom - top),
-        flowPosition,
-      }
-    })
-  }, [coreSectionStartFlowById, currentSlot])
+    return buildLayoutItemOverlays(currentSlot.page, layoutItemStartFlowById)
+  }, [currentSlot, layoutItemStartFlowById])
+
+  const pageSupportsLayoutItems =
+    currentSlot?.kind === 'page' &&
+    (currentSlot.page.sourcePageType === 'core' ||
+      currentSlot.page.sourcePageType === 'program' ||
+      currentSlot.page.sourcePageType === 'academic' ||
+      currentSlot.page.sourcePageType === 'non-academic')
 
   const goToPrev = () => onPreviewPageChange(Math.max(0, safeIdx - 1))
   const goToNext = () => onPreviewPageChange(Math.min(totalSlots - 1, safeIdx + 1))
@@ -419,20 +343,19 @@ export function CanvasPreview({
     releasePointerCaptureIfHeld(e.currentTarget ?? containerRef.current, e.pointerId)
   }
 
-  const handleSectionPointerDown = (
+  const handleLayoutItemPointerDown = (
     e: React.PointerEvent<HTMLButtonElement>,
-    sectionId: string,
+    itemId: string,
     flowPosition: number,
   ) => {
-    if (!currentSlot || currentSlot.kind !== 'page' || currentSlot.page.sourcePageType !== 'core') {
+    if (!currentSlot || currentSlot.kind !== 'page' || !pageSupportsLayoutItems) {
       return
     }
     if (isSpaceDown || e.button !== 0) {
       return
     }
     const isSelectedInEditor =
-      focusedCoreSection?.sectionId === sectionId &&
-      focusedCoreSection.pageId === currentSlot.page.sourcePageId
+      focusedLayoutItem?.itemId === itemId && focusedLayoutItem.pageId === currentSlot.page.sourcePageId
     if (!isSelectedInEditor) {
       return
     }
@@ -440,9 +363,9 @@ export function CanvasPreview({
     e.stopPropagation()
     sectionCaptureRef.current = e.currentTarget
     e.currentTarget.setPointerCapture(e.pointerId)
-    setSectionDrag({
+    setItemDrag({
       pageId: currentSlot.page.sourcePageId,
-      sectionId,
+      itemId,
       pointerId: e.pointerId,
       startClientY: e.clientY,
       startFlow: flowPosition,
@@ -452,38 +375,45 @@ export function CanvasPreview({
     })
   }
 
-  const handleSectionPointerMove = (e: React.PointerEvent<HTMLButtonElement>) => {
-    setSectionDrag((prev) => {
+  const handleLayoutItemPointerMove = (e: React.PointerEvent<HTMLButtonElement>) => {
+    setItemDrag((prev) => {
       if (!prev || prev.pointerId !== e.pointerId) {
         return prev
       }
       e.preventDefault()
       e.stopPropagation()
-      // Convert pointer movement from screen px back to document-space px, so drag behavior stays correct at any zoom.
       const deltaY = (e.clientY - prev.startClientY) / zoom
       const snapped = snapFlowPosition(prev.startFlow + deltaY, FLOW_POSITION_SNAP_INCREMENT)
       return { ...prev, flow: Math.max(0, snapped) }
     })
   }
 
-  const handleSectionPointerUp = (e: React.PointerEvent<HTMLButtonElement>) => {
+  const handleLayoutItemPointerUp = (e: React.PointerEvent<HTMLButtonElement>) => {
     const pointerId = e.pointerId
     releasePointerCaptureIfHeld(sectionCaptureRef.current, pointerId)
     sectionCaptureRef.current = null
 
-    setSectionDrag((prev) => {
+    setItemDrag((prev) => {
       if (!prev || prev.pointerId !== pointerId) {
         return prev
       }
-      onCoreSectionReposition?.(prev.pageId, prev.sectionId, prev.flow)
+      onLayoutItemReposition?.(prev.pageId, prev.itemId, prev.flow)
       return null
     })
     e.stopPropagation()
   }
 
+  const handleCanvasTextPointerDown = (e: React.PointerEvent<HTMLDivElement>, itemId: string | undefined) => {
+    if (!itemId || !onLayoutItemSelect || isSpaceDown || e.button !== 0) {
+      return
+    }
+    e.stopPropagation()
+    onLayoutItemSelect(itemId)
+  }
+
   const activeGuide =
-    sectionDrag && currentSlot?.kind === 'page'
-      ? placementFromFlow(sectionDrag.flow, sectionDrag.contentTop, sectionDrag.maxContentY)
+    itemDrag && currentSlot?.kind === 'page'
+      ? placementFromFlow(itemDrag.flow, itemDrag.contentTop, itemDrag.maxContentY)
       : null
 
   const cursorClass = isDragging ? 'cursor-grabbing' : isSpaceDown ? 'cursor-grab' : 'cursor-default'
@@ -504,7 +434,7 @@ export function CanvasPreview({
           </p>
         </div>
 
-        {onCoreSectionReposition && (
+        {onLayoutItemReposition && pageSupportsLayoutItems && (
           <div className="flex shrink-0 items-center gap-0.5 border-r border-[var(--color-hairline-soft)] pr-1.5">
             <Button
               type="button"
@@ -631,41 +561,55 @@ export function CanvasPreview({
               className="absolute animate-fade-in overflow-hidden border border-[var(--color-hairline)] bg-white shadow-[0_1px_2px_rgba(38,37,30,0.06),0_8px_24px_rgba(38,37,30,0.08)] transition-opacity"
               style={{ width: PAGE_WIDTH * zoom, height: PAGE_HEIGHT * zoom }}
             >
-              {currentSlot.page.blocks.map((block) => (
-                <div
-                  key={block.id}
-                  className="pointer-events-none absolute z-[1] whitespace-pre-wrap text-[var(--color-ink)]"
-                  style={{
-                    left: block.x * zoom,
-                    top: block.y * zoom,
-                    width: block.width * zoom,
-                    maxWidth: block.width * zoom,
-                    height: getBlockPreviewHeight(block, zoom),
-                    fontSize: block.fontSize * zoom,
-                    lineHeight: `${block.lineHeight * zoom}px`,
-                    fontWeight: block.fontWeight,
-                    fontStyle: block.fontStyle,
-                    letterSpacing: `${(block.letterSpacing ?? 0) * zoom}px`,
-                    textAlign: block.align,
-                    fontFamily: getFontStack(block.fontFamily),
-                    overflow: 'hidden',
-                  }}
-                >
-                  {getRenderedBlockLines(block).join('\n')}
-                </div>
-              ))}
-              {currentSlot.page.sourcePageType === 'core' &&
-                coreSectionOverlays
+              {currentSlot.page.blocks.map((block) => {
+                const isSelectedBlock =
+                  Boolean(block.sectionId) &&
+                  focusedLayoutItem != null &&
+                  focusedLayoutItem.itemId === block.sectionId &&
+                  focusedLayoutItem.pageId === currentSlot.page.sourcePageId
+                return (
+                  <div
+                    key={block.id}
+                    role={block.sectionId ? 'button' : undefined}
+                    tabIndex={block.sectionId ? -1 : undefined}
+                    className={cn(
+                      'absolute z-[1] whitespace-pre-wrap text-[var(--color-ink)]',
+                      block.sectionId && !isSpaceDown && 'pointer-events-auto cursor-pointer',
+                      !block.sectionId && 'pointer-events-none',
+                      isSelectedBlock &&
+                        'rounded-sm ring-1 ring-[color:color-mix(in_srgb,var(--color-primary)_35%,transparent)]',
+                    )}
+                    style={{
+                      left: block.x * zoom,
+                      top: block.y * zoom,
+                      width: block.width * zoom,
+                      maxWidth: block.width * zoom,
+                      height: getBlockPreviewHeight(block, zoom),
+                      fontSize: block.fontSize * zoom,
+                      lineHeight: `${block.lineHeight * zoom}px`,
+                      fontWeight: block.fontWeight,
+                      fontStyle: block.fontStyle,
+                      letterSpacing: `${(block.letterSpacing ?? 0) * zoom}px`,
+                      textAlign: block.align,
+                      fontFamily: getFontStack(block.fontFamily),
+                      overflow: 'hidden',
+                    }}
+                    onPointerDown={(e) => handleCanvasTextPointerDown(e, block.sectionId)}
+                  >
+                    {getRenderedBlockLines(block).join('\n')}
+                  </div>
+                )
+              })}
+              {pageSupportsLayoutItems &&
+                layoutItemOverlays
                   .filter(
                     (overlay) =>
-                      focusedCoreSection?.sectionId === overlay.sectionId &&
-                      focusedCoreSection.pageId === currentSlot.page.sourcePageId,
+                      focusedLayoutItem?.itemId === overlay.itemId &&
+                      focusedLayoutItem.pageId === currentSlot.page.sourcePageId,
                   )
                   .map((overlay) => {
-                    const isDraggingSection = sectionDrag?.sectionId === overlay.sectionId
-                    const translateY = isDraggingSection
-                      ? (sectionDrag.flow - sectionDrag.startFlow) * zoom
-                      : 0
+                    const isDraggingItem = itemDrag?.itemId === overlay.itemId
+                    const translateY = isDraggingItem ? (itemDrag.flow - itemDrag.startFlow) * zoom : 0
                     return (
                       <button
                         key={`drag-${overlay.id}`}
@@ -681,17 +625,17 @@ export function CanvasPreview({
                           height: overlay.height * zoom,
                           transform: `translateY(${translateY}px)`,
                         }}
-                        title="Drag to reposition section"
+                        title="Drag to reposition"
                         onPointerDown={(e) =>
-                          handleSectionPointerDown(e, overlay.sectionId, overlay.flowPosition)
+                          handleLayoutItemPointerDown(e, overlay.itemId, overlay.flowPosition)
                         }
-                        onPointerMove={handleSectionPointerMove}
-                        onPointerUp={handleSectionPointerUp}
-                        onPointerCancel={handleSectionPointerUp}
+                        onPointerMove={handleLayoutItemPointerMove}
+                        onPointerUp={handleLayoutItemPointerUp}
+                        onPointerCancel={handleLayoutItemPointerUp}
                       />
                     )
                   })}
-              {currentSlot.page.sourcePageType === 'core' &&
+              {pageSupportsLayoutItems &&
                 activeGuide &&
                 activeGuide.localPageIndex === currentSlot.page.sourcePageLocalIndex && (
                   <>

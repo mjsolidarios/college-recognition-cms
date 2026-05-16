@@ -10,6 +10,8 @@ export interface ProgramRow {
   leftBody: string
   rightTitle?: string
   rightBody?: string
+  /** Flow-space anchor position in px (column-aware layout). */
+  flowPosition?: number
 }
 
 export interface AcademicEntry {
@@ -18,6 +20,7 @@ export interface AcademicEntry {
   award: string
   category: string
   gradeLevel: string
+  flowPosition?: number
 }
 
 export interface NonAcademicEntry {
@@ -25,6 +28,7 @@ export interface NonAcademicEntry {
   name: string
   award: string
   category: string
+  flowPosition?: number
 }
 
 export interface CoreSection {

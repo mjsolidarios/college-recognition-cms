@@ -25,11 +25,12 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { FONT_OPTIONS } from '@/lib/fonts'
 import { exportPdfDocument, exportSvgDocument, warmPdfExportWorker } from '@/lib/exporters'
 import {
-  applyCoreSectionFlowMap,
-  repositionCoreSectionWithReflow,
-  type SectionFlowReflowCommand,
-} from '@/lib/core-section-flow'
-import { previewSlotIndexForCoreSection, previewSlotIndexForPageId } from '@/lib/preview-navigation'
+  applyPageLayoutFlowMap,
+  pageContainsLayoutItem,
+  repositionLayoutItemWithReflow,
+  type LayoutItemFlowReflowCommand,
+} from '@/lib/layout-item-flow'
+import { previewSlotIndexForLayoutItem, previewSlotIndexForPageId } from '@/lib/preview-navigation'
 import { renderDocument } from '@/lib/layout'
 import { defaultSettings, seedPages } from '@/lib/sample-data'
 import { deletePage, getPages, getSettings, savePage, saveSettings, getFrontCover, saveFrontCover, getBackCover, saveBackCover } from '@/lib/storage'
@@ -233,9 +234,9 @@ function App() {
 
   const [previewPageIndex, setPreviewPageIndex] = useState(0)
   const [coverUploadError, setCoverUploadError] = useState<string | null>(null)
-  const [sectionFlowUndo, setSectionFlowUndo] = useState<SectionFlowReflowCommand[]>([])
-  const [sectionFlowRedo, setSectionFlowRedo] = useState<SectionFlowReflowCommand[]>([])
-  const [focusedCoreSectionId, setFocusedCoreSectionId] = useState<string | null>(null)
+  const [layoutFlowUndo, setLayoutFlowUndo] = useState<LayoutItemFlowReflowCommand[]>([])
+  const [layoutFlowRedo, setLayoutFlowRedo] = useState<LayoutItemFlowReflowCommand[]>([])
+  const [focusedLayoutItemId, setFocusedLayoutItemId] = useState<string | null>(null)
   const pagesRef = useRef(pages)
   pagesRef.current = pages
 
@@ -253,24 +254,17 @@ function App() {
   }, [])
 
   useEffect(() => {
-    if (activePage?.type !== 'core') {
-      setFocusedCoreSectionId(null)
-      return
+    if (!activePage || !focusedLayoutItemId || !pageContainsLayoutItem(activePage, focusedLayoutItemId)) {
+      setFocusedLayoutItemId(null)
     }
-    if (
-      focusedCoreSectionId &&
-      !activePage.content.sections.some((section) => section.id === focusedCoreSectionId)
-    ) {
-      setFocusedCoreSectionId(null)
-    }
-  }, [activePage, focusedCoreSectionId])
+  }, [activePage, focusedLayoutItemId])
 
-  const focusedCoreSection = useMemo(() => {
-    if (activePage?.type !== 'core' || !focusedCoreSectionId) {
+  const focusedLayoutItem = useMemo(() => {
+    if (!activePage || !focusedLayoutItemId || !pageContainsLayoutItem(activePage, focusedLayoutItemId)) {
       return null
     }
-    return { pageId: activePage.id, sectionId: focusedCoreSectionId }
-  }, [activePage, focusedCoreSectionId])
+    return { pageId: activePage.id, itemId: focusedLayoutItemId }
+  }, [activePage, focusedLayoutItemId])
 
   const persistPages = (nextPages: CmsPage[]) => {
     const orderedPages = [...nextPages].sort((left, right) => left.order - right.order)
@@ -287,50 +281,50 @@ function App() {
     persistPages(nextPages)
   }
 
-  const clearSectionFlowHistory = useCallback(() => {
-    setSectionFlowUndo([])
-    setSectionFlowRedo([])
+  const clearLayoutFlowHistory = useCallback(() => {
+    setLayoutFlowUndo([])
+    setLayoutFlowRedo([])
   }, [])
 
-  const handleCoreSectionReposition = (pageId: string, sectionId: string, flowPosition: number) => {
-    const result = repositionCoreSectionWithReflow(
+  const handleLayoutItemReposition = (pageId: string, itemId: string, flowPosition: number) => {
+    const result = repositionLayoutItemWithReflow(
       pagesRef.current,
       pageId,
-      sectionId,
+      itemId,
       flowPosition,
       settings,
     )
     if (!result) {
       return
     }
-    setSectionFlowUndo((stack) => [
+    setLayoutFlowUndo((stack) => [
       ...stack,
-      { pageId, movedSectionId: sectionId, before: result.before, after: result.after },
+      { pageId, movedItemId: itemId, before: result.before, after: result.after },
     ])
-    setSectionFlowRedo([])
+    setLayoutFlowRedo([])
     persistPages(result.pages)
   }
 
-  const handleUndoSectionFlow = useCallback(() => {
-    setSectionFlowUndo((stack) => {
+  const handleUndoLayoutFlow = useCallback(() => {
+    setLayoutFlowUndo((stack) => {
       if (stack.length === 0) {
         return stack
       }
       const cmd = stack[stack.length - 1]!
-      setSectionFlowRedo((redo) => [...redo, cmd])
-      persistPages(applyCoreSectionFlowMap(pagesRef.current, cmd.pageId, cmd.before))
+      setLayoutFlowRedo((redo) => [...redo, cmd])
+      persistPages(applyPageLayoutFlowMap(pagesRef.current, cmd.pageId, cmd.before))
       return stack.slice(0, -1)
     })
   }, [])
 
-  const handleRedoSectionFlow = useCallback(() => {
-    setSectionFlowRedo((stack) => {
+  const handleRedoLayoutFlow = useCallback(() => {
+    setLayoutFlowRedo((stack) => {
       if (stack.length === 0) {
         return stack
       }
       const cmd = stack[stack.length - 1]!
-      setSectionFlowUndo((undo) => [...undo, cmd])
-      persistPages(applyCoreSectionFlowMap(pagesRef.current, cmd.pageId, cmd.after))
+      setLayoutFlowUndo((undo) => [...undo, cmd])
+      persistPages(applyPageLayoutFlowMap(pagesRef.current, cmd.pageId, cmd.after))
       return stack.slice(0, -1)
     })
   }, [])
@@ -353,17 +347,17 @@ function App() {
       }
       if (event.key === 'z' && !event.shiftKey) {
         event.preventDefault()
-        handleUndoSectionFlow()
+        handleUndoLayoutFlow()
         return
       }
       if (event.key === 'y' || (event.key === 'z' && event.shiftKey)) {
         event.preventDefault()
-        handleRedoSectionFlow()
+        handleRedoLayoutFlow()
       }
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [handleRedoSectionFlow, handleUndoSectionFlow])
+  }, [handleRedoLayoutFlow, handleUndoLayoutFlow])
 
   const handleAddPage = (pageType: PageType) => {
     const page = createBlankPage(pageType, pages.length)
@@ -394,19 +388,19 @@ function App() {
   const handleSelectPage = useCallback(
     (pageId: string) => {
       setActivePageId(pageId)
-      setFocusedCoreSectionId(null)
+      setFocusedLayoutItemId(null)
       syncPreviewToPage(pageId)
     },
     [syncPreviewToPage],
   )
 
-  const handleCoreSectionFocus = useCallback(
-    (sectionId: string) => {
-      if (activePage?.type !== 'core') {
+  const handleLayoutItemSelect = useCallback(
+    (itemId: string) => {
+      if (!activePage || !pageContainsLayoutItem(activePage, itemId)) {
         return
       }
-      setFocusedCoreSectionId(sectionId)
-      const index = previewSlotIndexForCoreSection(renderedPages, activePage.id, sectionId, {
+      setFocusedLayoutItemId(itemId)
+      const index = previewSlotIndexForLayoutItem(renderedPages, activePage.id, itemId, {
         hasFrontCover: Boolean(frontCover),
       })
       if (index !== null) {
@@ -427,7 +421,7 @@ function App() {
   }
 
   const handleReset = () => {
-    clearSectionFlowHistory()
+    clearLayoutFlowHistory()
     pages.forEach((page) => {
       deletePage(page.id)
     })
@@ -583,8 +577,8 @@ function App() {
             <PageEditor
               page={activePage}
               onChange={handlePageChange}
-              selectedCoreSectionId={focusedCoreSectionId}
-              onCoreSectionFocus={handleCoreSectionFocus}
+              selectedLayoutItemId={focusedLayoutItemId}
+              onLayoutItemSelect={handleLayoutItemSelect}
             />
           ) : null}
         </ScrollArea>
@@ -999,12 +993,13 @@ function App() {
                 onPreviewPageChange={setPreviewPageIndex}
                 frontCover={frontCover}
                 backCover={backCover}
-                onCoreSectionReposition={handleCoreSectionReposition}
-                focusedCoreSection={focusedCoreSection}
-                onUndoSectionFlow={handleUndoSectionFlow}
-                onRedoSectionFlow={handleRedoSectionFlow}
-                canUndoSectionFlow={sectionFlowUndo.length > 0}
-                canRedoSectionFlow={sectionFlowRedo.length > 0}
+                onLayoutItemReposition={handleLayoutItemReposition}
+                focusedLayoutItem={focusedLayoutItem}
+                onLayoutItemSelect={handleLayoutItemSelect}
+                onUndoSectionFlow={handleUndoLayoutFlow}
+                onRedoSectionFlow={handleRedoLayoutFlow}
+                canUndoSectionFlow={layoutFlowUndo.length > 0}
+                canRedoSectionFlow={layoutFlowRedo.length > 0}
               />
           </div>
 
@@ -1041,12 +1036,13 @@ function App() {
                 onPreviewPageChange={setPreviewPageIndex}
                 frontCover={frontCover}
                 backCover={backCover}
-                onCoreSectionReposition={handleCoreSectionReposition}
-                focusedCoreSection={focusedCoreSection}
-                onUndoSectionFlow={handleUndoSectionFlow}
-                onRedoSectionFlow={handleRedoSectionFlow}
-                canUndoSectionFlow={sectionFlowUndo.length > 0}
-                canRedoSectionFlow={sectionFlowRedo.length > 0}
+                onLayoutItemReposition={handleLayoutItemReposition}
+                focusedLayoutItem={focusedLayoutItem}
+                onLayoutItemSelect={handleLayoutItemSelect}
+                onUndoSectionFlow={handleUndoLayoutFlow}
+                onRedoSectionFlow={handleRedoLayoutFlow}
+                canUndoSectionFlow={layoutFlowUndo.length > 0}
+                canRedoSectionFlow={layoutFlowRedo.length > 0}
               />
           </div>
           <div className={mobileTab === 'editor' ? 'block h-full' : 'hidden'}>

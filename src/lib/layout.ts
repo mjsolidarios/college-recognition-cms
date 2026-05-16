@@ -1,12 +1,15 @@
 import type {
   AcademicEntry,
+  AcademicPage,
   CmsPage,
   CmsSettings,
   CorePage,
   CoreSection,
+  NonAcademicPage,
+  ProgramPage,
+  ProgramRow,
   FontPreset,
   NonAcademicEntry,
-  ProgramRow,
   RenderTextBlock,
   RenderedPage,
 } from '@/types/cms'
@@ -23,8 +26,6 @@ const PARAGRAPH_GAP = 6
 const ITEM_GAP = 2
 /** Pixels inset for faculty name lists under “Permanent Faculty:” / “Part-time Lecturers:”. */
 const CORE_LIST_INDENT = 14
-/** Indent used when awardee names wrap to multiple lines so continuations stay nested under each award heading. */
-const AWARDEE_LIST_INDENT = 12
 /** Shrink wrap width slightly so layout reserves at least as many lines as the canvas / PDF renderer. */
 const WRAP_WIDTH_INSET = 10
 
@@ -744,36 +745,70 @@ function groupAcademicEntries(entries: AcademicEntry[]) {
   return grouped
 }
 
+function renderAcademicEntry(context: LayoutContext, entry: AcademicEntry, key: string) {
+  const sectionId = entry.id
+  addLinesToFlow(context, {
+    idPrefix: `academic-name-${key}`,
+    text: entry.name,
+    fontSize: context.settings.bodySize,
+    fontWeight: 'bold',
+    spacingAfter: ITEM_GAP,
+    allowSplit: false,
+    reserveHeight: context.settings.bodySize * getScale(context.settings) * context.settings.lineHeight,
+    sectionId,
+  })
+  addLinesToFlow(context, {
+    idPrefix: `academic-award-${key}`,
+    text: entry.award,
+    fontSize: context.settings.bodySize,
+    spacingAfter: 10,
+    minFragmentLines: 2,
+    sectionId,
+  })
+}
+
 function renderAcademicPage(context: LayoutContext, entries: AcademicEntry[]) {
+  const sorted = [...entries].map((entry, index) => ({ item: entry, index })).sort(compareByFlowPosition)
   let gradeIndex = 0
-  for (const [gradeLevel, categories] of groupAcademicEntries(entries).entries()) {
-    addLinesToFlow(context, {
-      idPrefix: `academic-grade-${gradeIndex}`,
-      text: gradeLevel,
-      fontSize: context.settings.subtitleSize,
-      textRole: 'heading',
-      fontWeight: 'bold',
-      spacingAfter: 8,
-      allowSplit: false,
-      reserveHeight: estimateTextHeight(
-        context,
-        {
-          idPrefix: `academic-grade-${gradeIndex}-reserve`,
-            text: [...categories.keys()][0] ?? '',
+  let categoryIndex = 0
+  let lastGrade: string | null = null
+  let lastCategory: string | null = null
+
+  for (const { item: entry, index } of sorted) {
+    if (entry.gradeLevel !== lastGrade) {
+      lastGrade = entry.gradeLevel
+      lastCategory = null
+      const categories = groupAcademicEntries(entries).get(entry.gradeLevel)
+      addLinesToFlow(context, {
+        idPrefix: `academic-grade-${gradeIndex}`,
+        text: entry.gradeLevel,
+        fontSize: context.settings.subtitleSize,
+        textRole: 'heading',
+        fontWeight: 'bold',
+        spacingAfter: 8,
+        allowSplit: false,
+        reserveHeight: estimateTextHeight(
+          context,
+          {
+            idPrefix: `academic-grade-${gradeIndex}-reserve`,
+            text: [...(categories?.keys() ?? [])][0] ?? '',
             fontSize: context.settings.headingSize,
             textRole: 'heading',
             fontWeight: 'bold',
-        },
-        1,
-        true,
-      ),
-    })
+          },
+          1,
+          true,
+        ),
+      })
+      gradeIndex += 1
+      categoryIndex = 0
+    }
 
-    let categoryIndex = 0
-    for (const [category, awards] of categories.entries()) {
+    if (entry.category !== lastCategory) {
+      lastCategory = entry.category
       addLinesToFlow(context, {
         idPrefix: `academic-category-${gradeIndex}-${categoryIndex}`,
-        text: category,
+        text: entry.category,
         fontSize: context.settings.headingSize,
         textRole: 'heading',
         fontWeight: 'bold',
@@ -783,7 +818,7 @@ function renderAcademicPage(context: LayoutContext, entries: AcademicEntry[]) {
           context,
           {
             idPrefix: `academic-category-${gradeIndex}-${categoryIndex}-reserve`,
-            text: [...awards.keys()][0] ?? '',
+            text: entry.award,
             fontSize: context.settings.bodySize,
             fontWeight: 'bold',
           },
@@ -791,101 +826,85 @@ function renderAcademicPage(context: LayoutContext, entries: AcademicEntry[]) {
           true,
         ) + context.settings.bodySize * getScale(context.settings) * context.settings.lineHeight,
       })
-
-      let awardIndex = 0
-      for (const [award, names] of awards.entries()) {
-        addLinesToFlow(context, {
-          idPrefix: `academic-award-${gradeIndex}-${categoryIndex}-${awardIndex}`,
-          text: award,
-          fontSize: context.settings.bodySize,
-          fontWeight: 'bold',
-          spacingAfter: ITEM_GAP,
-          allowSplit: false,
-          reserveHeight: context.settings.bodySize * getScale(context.settings) * context.settings.lineHeight,
-        })
-        addLinesToFlow(context, {
-          idPrefix: `academic-names-${gradeIndex}-${categoryIndex}-${awardIndex}`,
-          text: names.join('\n'),
-          fontSize: context.settings.bodySize,
-          spacingAfter: 10,
-          indent: AWARDEE_LIST_INDENT,
-          minFragmentLines: 2,
-        })
-        awardIndex += 1
-      }
-
       categoryIndex += 1
     }
 
-    gradeIndex += 1
+    if (isValidFlowPosition(entry.flowPosition)) {
+      setContextToFlowPosition(context, entry.flowPosition)
+    }
+    renderAcademicEntry(context, entry, `${entry.id}-${index}`)
   }
 }
 
-function groupNonAcademicEntries(entries: NonAcademicEntry[]) {
-  const grouped = new Map<string, NonAcademicEntry[]>()
-  for (const entry of entries) {
-    if (!grouped.has(entry.category)) {
-      grouped.set(entry.category, [])
-    }
-    grouped.get(entry.category)!.push(entry)
-  }
-  return grouped
+function renderNonAcademicEntry(context: LayoutContext, entry: NonAcademicEntry, key: string) {
+  const sectionId = entry.id
+  addLinesToFlow(context, {
+    idPrefix: `nonacademic-name-${key}`,
+    text: entry.name,
+    fontSize: context.settings.bodySize,
+    fontWeight: 'bold',
+    spacingAfter: ITEM_GAP,
+    allowSplit: false,
+    reserveHeight: context.settings.bodySize * getScale(context.settings) * context.settings.lineHeight,
+    sectionId,
+  })
+  addLinesToFlow(context, {
+    idPrefix: `nonacademic-award-${key}`,
+    text: entry.award,
+    fontSize: context.settings.bodySize,
+    spacingAfter: 12,
+    minFragmentLines: 2,
+    sectionId,
+  })
 }
 
 function renderNonAcademicPage(context: LayoutContext, entries: NonAcademicEntry[]) {
+  const sorted = [...entries].map((entry, index) => ({ item: entry, index })).sort(compareByFlowPosition)
   let categoryIndex = 0
-  for (const [category, groupedEntries] of groupNonAcademicEntries(entries).entries()) {
-    addLinesToFlow(context, {
-      idPrefix: `nonacademic-category-${categoryIndex}`,
-        text: category,
+  let lastCategory: string | null = null
+
+  for (const { item: entry, index } of sorted) {
+    if (entry.category !== lastCategory) {
+      lastCategory = entry.category
+      addLinesToFlow(context, {
+        idPrefix: `nonacademic-category-${categoryIndex}`,
+        text: entry.category,
         fontSize: context.settings.headingSize,
         textRole: 'heading',
         fontWeight: 'bold',
-      spacingAfter: 10,
-      allowSplit: false,
-      reserveHeight:
-        estimateTextHeight(
-          context,
-          {
-            idPrefix: `nonacademic-name-${categoryIndex}-reserve`,
-            text: groupedEntries[0]?.name ?? '',
-            fontSize: context.settings.bodySize,
-            fontWeight: 'bold',
-          },
-          1,
-          true,
-        ) + context.settings.bodySize * getScale(context.settings) * context.settings.lineHeight,
-    })
-
-    groupedEntries.forEach((entry, entryIndex) => {
-      addLinesToFlow(context, {
-        idPrefix: `nonacademic-name-${categoryIndex}-${entryIndex}`,
-        text: entry.name,
-        fontSize: context.settings.bodySize,
-        fontWeight: 'bold',
-        spacingAfter: ITEM_GAP,
+        spacingAfter: 10,
         allowSplit: false,
-        reserveHeight: context.settings.bodySize * getScale(context.settings) * context.settings.lineHeight,
+        reserveHeight:
+          estimateTextHeight(
+            context,
+            {
+              idPrefix: `nonacademic-name-${categoryIndex}-reserve`,
+              text: entry.name,
+              fontSize: context.settings.bodySize,
+              fontWeight: 'bold',
+            },
+            1,
+            true,
+          ) + context.settings.bodySize * getScale(context.settings) * context.settings.lineHeight,
       })
-      addLinesToFlow(context, {
-        idPrefix: `nonacademic-award-${categoryIndex}-${entryIndex}`,
-        text: entry.award,
-        fontSize: context.settings.bodySize,
-        spacingAfter: 12,
-        minFragmentLines: 2,
-      })
-    })
+      categoryIndex += 1
+    }
 
-    categoryIndex += 1
+    if (isValidFlowPosition(entry.flowPosition)) {
+      setContextToFlowPosition(context, entry.flowPosition)
+    }
+    renderNonAcademicEntry(context, entry, `${entry.id}-${index}`)
   }
 }
 
-function compareSectionsByFlowPosition(
-  left: { section: CoreSection; index: number },
-  right: { section: CoreSection; index: number },
+type FlowOrderedItem = { id: string; flowPosition?: number }
+
+function compareByFlowPosition<T extends FlowOrderedItem>(
+  left: { item: T; index: number },
+  right: { item: T; index: number },
 ) {
-  const leftFlow = isValidFlowPosition(left.section.flowPosition) ? left.section.flowPosition : undefined
-  const rightFlow = isValidFlowPosition(right.section.flowPosition) ? right.section.flowPosition : undefined
+  const leftFlow = isValidFlowPosition(left.item.flowPosition) ? left.item.flowPosition : undefined
+  const rightFlow = isValidFlowPosition(right.item.flowPosition) ? right.item.flowPosition : undefined
   if (leftFlow === undefined && rightFlow === undefined) return left.index - right.index
   if (leftFlow === undefined) return 1
   if (rightFlow === undefined) return -1
@@ -893,14 +912,39 @@ function compareSectionsByFlowPosition(
   return leftFlow - rightFlow
 }
 
-function renderProgramPage(context: LayoutContext, rows: ProgramRow[]) {
-  /**
-   * Trailing gutter after each cell (~one body line: scales with typography).
-   * Row bands still advance with max(Y)—uneven LEFT still adds slack versus RIGHT until content is tightened.
-   */
-  const afterBodySpacing = context.settings.bodySize * context.settings.lineHeight
+function packFlowPositions<T extends FlowOrderedItem>(
+  items: T[],
+  implicit: Map<string, number>,
+  spanById: Map<string, number>,
+  overrides: Record<string, number> = {},
+): Map<string, number> {
+  const entries = items.map((item, index) => {
+    const desired =
+      overrides[item.id] ??
+      (isValidFlowPosition(item.flowPosition) ? item.flowPosition : implicit.get(item.id) ?? 0)
+    return {
+      item,
+      index,
+      desired: snapFlowPosition(desired),
+      span: spanById.get(item.id) ?? FLOW_PACK_GAP,
+    }
+  })
 
-  rows.forEach((row, index) => {
+  entries.sort((left, right) => left.desired - right.desired || left.index - right.index)
+
+  const resolved = new Map<string, number>()
+  let cursor = 0
+  for (const entry of entries) {
+    const start = snapFlowPosition(Math.max(entry.desired, cursor))
+    resolved.set(entry.item.id, start)
+    cursor = start + entry.span + FLOW_PACK_GAP
+  }
+  return resolved
+}
+
+function renderProgramRow(context: LayoutContext, row: ProgramRow, index: number) {
+  const afterBodySpacing = context.settings.bodySize * context.settings.lineHeight
+  const sectionId = row.id
     const leftBodyReserve = estimateTextHeight(
       context,
       {
@@ -972,6 +1016,7 @@ function renderProgramPage(context: LayoutContext, rows: ProgramRow[]) {
       allowSplit: false,
       pinColumn: 0,
       reserveHeight: leftBodyReserve,
+      sectionId,
     })
     addLinesToFlow(context, {
       idPrefix: `program-left-body-${index}`,
@@ -980,6 +1025,7 @@ function renderProgramPage(context: LayoutContext, rows: ProgramRow[]) {
       spacingAfter: afterBodySpacing,
       pinColumn: 0,
       minFragmentLines: 2,
+      sectionId,
     })
 
     const stillSameRowPage = context.currentPageIndex === rowStartPageIndex
@@ -995,6 +1041,7 @@ function renderProgramPage(context: LayoutContext, rows: ProgramRow[]) {
       allowSplit: false,
       pinColumn: 1,
       reserveHeight: rightBodyReserve,
+      sectionId,
     })
     addLinesToFlow(context, {
       idPrefix: `program-right-body-${index}`,
@@ -1003,9 +1050,21 @@ function renderProgramPage(context: LayoutContext, rows: ProgramRow[]) {
       spacingAfter: afterBodySpacing,
       pinColumn: 1,
       minFragmentLines: 2,
+      sectionId,
     })
-    context.currentColumn = context.currentY[0] >= context.currentY[1] ? 0 : 1
-  })
+  context.currentColumn = context.currentY[0] >= context.currentY[1] ? 0 : 1
+}
+
+function renderProgramPage(context: LayoutContext, rows: ProgramRow[]) {
+  ;[...rows]
+    .map((row, index) => ({ item: row, index }))
+    .sort(compareByFlowPosition)
+    .forEach(({ item: row, index }) => {
+      if (isValidFlowPosition(row.flowPosition)) {
+        setContextToFlowPosition(context, row.flowPosition)
+      }
+      renderProgramRow(context, row, index)
+    })
 }
 
 function appendPageNumbers(renderedPages: RenderedPage[], settings: CmsSettings) {
@@ -1073,33 +1132,163 @@ export function resolveCoreSectionFlowPositions(
   settings: CmsSettings,
   overrides: Record<string, number> = {},
 ): Map<string, number> {
-  const implicit = computeImplicitCoreSectionFlows(page, settings)
-  const spanById = new Map(
-    page.content.sections.map((section) => [section.id, measureCoreSectionFlowSpan(page, settings, section)]),
+  return packFlowPositions(
+    page.content.sections,
+    computeImplicitCoreSectionFlows(page, settings),
+    new Map(page.content.sections.map((section) => [section.id, measureCoreSectionFlowSpan(page, settings, section)])),
+    overrides,
   )
+}
 
-  const entries = page.content.sections.map((section, index) => {
-    const desired =
-      overrides[section.id] ??
-      (isValidFlowPosition(section.flowPosition) ? section.flowPosition : implicit.get(section.id) ?? 0)
-    return {
-      section,
-      index,
-      desired: snapFlowPosition(desired),
-      span: spanById.get(section.id) ?? FLOW_PACK_GAP,
-    }
+function measureProgramRowFlowSpan(page: ProgramPage, settings: CmsSettings, row: ProgramRow): number {
+  const context = createLayoutContext(page, settings, 1)
+  setContextToFlowPosition(context, 0)
+  const start = flowAtLayoutContext(context, context.currentColumn)
+  renderProgramRow(context, row, 0)
+  const end = flowAtLayoutContext(context, context.currentColumn)
+  return Math.max(FLOW_PACK_GAP, end - start)
+}
+
+function computeImplicitProgramRowFlows(page: ProgramPage, settings: CmsSettings): Map<string, number> {
+  const context = createLayoutContext(page, settings, 1)
+  const flows = new Map<string, number>()
+  page.content.rows.forEach((row, index) => {
+    flows.set(row.id, flowAtLayoutContext(context, context.currentColumn))
+    renderProgramRow(context, row, index)
   })
+  return flows
+}
 
-  entries.sort((left, right) => left.desired - right.desired || left.index - right.index)
+export function resolveProgramRowFlowPositions(
+  page: ProgramPage,
+  settings: CmsSettings,
+  overrides: Record<string, number> = {},
+): Map<string, number> {
+  return packFlowPositions(
+    page.content.rows,
+    computeImplicitProgramRowFlows(page, settings),
+    new Map(page.content.rows.map((row) => [row.id, measureProgramRowFlowSpan(page, settings, row)])),
+    overrides,
+  )
+}
 
-  const resolved = new Map<string, number>()
-  let cursor = 0
-  for (const entry of entries) {
-    const start = snapFlowPosition(Math.max(entry.desired, cursor))
-    resolved.set(entry.section.id, start)
-    cursor = start + entry.span + FLOW_PACK_GAP
+function measureAcademicEntryFlowSpan(page: AcademicPage, settings: CmsSettings, entry: AcademicEntry): number {
+  const context = createLayoutContext(page, settings, 1)
+  setContextToFlowPosition(context, 0)
+  const start = flowAtLayoutContext(context, context.currentColumn)
+  renderAcademicEntry(context, entry, `measure-${entry.id}`)
+  const end = flowAtLayoutContext(context, context.currentColumn)
+  return Math.max(FLOW_PACK_GAP, end - start)
+}
+
+function computeImplicitAcademicEntryFlows(page: AcademicPage, settings: CmsSettings): Map<string, number> {
+  const context = createLayoutContext(page, settings, 1)
+  const flows = new Map<string, number>()
+  let gradeIndex = 0
+  let categoryIndex = 0
+  let lastGrade: string | null = null
+  let lastCategory: string | null = null
+
+  for (const [index, entry] of page.content.entries.entries()) {
+    if (entry.gradeLevel !== lastGrade) {
+      lastGrade = entry.gradeLevel
+      lastCategory = null
+      addLinesToFlow(context, {
+        idPrefix: `academic-grade-implicit-${gradeIndex}`,
+        text: entry.gradeLevel,
+        fontSize: settings.subtitleSize,
+        textRole: 'heading',
+        fontWeight: 'bold',
+        spacingAfter: 8,
+        allowSplit: false,
+      })
+      gradeIndex += 1
+      categoryIndex = 0
+    }
+    if (entry.category !== lastCategory) {
+      lastCategory = entry.category
+      addLinesToFlow(context, {
+        idPrefix: `academic-category-implicit-${gradeIndex}-${categoryIndex}`,
+        text: entry.category,
+        fontSize: settings.headingSize,
+        textRole: 'heading',
+        fontWeight: 'bold',
+        spacingAfter: 8,
+        allowSplit: false,
+      })
+      categoryIndex += 1
+    }
+    flows.set(entry.id, flowAtLayoutContext(context, context.currentColumn))
+    renderAcademicEntry(context, entry, `implicit-${index}`)
   }
-  return resolved
+  return flows
+}
+
+export function resolveAcademicEntryFlowPositions(
+  page: AcademicPage,
+  settings: CmsSettings,
+  overrides: Record<string, number> = {},
+): Map<string, number> {
+  return packFlowPositions(
+    page.content.entries,
+    computeImplicitAcademicEntryFlows(page, settings),
+    new Map(page.content.entries.map((entry) => [entry.id, measureAcademicEntryFlowSpan(page, settings, entry)])),
+    overrides,
+  )
+}
+
+function measureNonAcademicEntryFlowSpan(
+  page: NonAcademicPage,
+  settings: CmsSettings,
+  entry: NonAcademicEntry,
+): number {
+  const context = createLayoutContext(page, settings, 1)
+  setContextToFlowPosition(context, 0)
+  const start = flowAtLayoutContext(context, context.currentColumn)
+  renderNonAcademicEntry(context, entry, `measure-${entry.id}`)
+  const end = flowAtLayoutContext(context, context.currentColumn)
+  return Math.max(FLOW_PACK_GAP, end - start)
+}
+
+function computeImplicitNonAcademicEntryFlows(page: NonAcademicPage, settings: CmsSettings): Map<string, number> {
+  const context = createLayoutContext(page, settings, 1)
+  const flows = new Map<string, number>()
+  let categoryIndex = 0
+  let lastCategory: string | null = null
+
+  for (const [index, entry] of page.content.entries.entries()) {
+    if (entry.category !== lastCategory) {
+      lastCategory = entry.category
+      addLinesToFlow(context, {
+        idPrefix: `nonacademic-category-implicit-${categoryIndex}`,
+        text: entry.category,
+        fontSize: settings.headingSize,
+        textRole: 'heading',
+        fontWeight: 'bold',
+        spacingAfter: 10,
+        allowSplit: false,
+      })
+      categoryIndex += 1
+    }
+    flows.set(entry.id, flowAtLayoutContext(context, context.currentColumn))
+    renderNonAcademicEntry(context, entry, `implicit-${index}`)
+  }
+  return flows
+}
+
+export function resolveNonAcademicEntryFlowPositions(
+  page: NonAcademicPage,
+  settings: CmsSettings,
+  overrides: Record<string, number> = {},
+): Map<string, number> {
+  return packFlowPositions(
+    page.content.entries,
+    computeImplicitNonAcademicEntryFlows(page, settings),
+    new Map(
+      page.content.entries.map((entry) => [entry.id, measureNonAcademicEntryFlowSpan(page, settings, entry)]),
+    ),
+    overrides,
+  )
 }
 
 export function renderDocument(pages: CmsPage[], settings: CmsSettings) {
@@ -1112,9 +1301,9 @@ export function renderDocument(pages: CmsPage[], settings: CmsSettings) {
     switch (page.type) {
       case 'core':
         page.content.sections
-          .map((section, index) => ({ section, index }))
-          .sort(compareSectionsByFlowPosition)
-          .forEach(({ section, index }) => {
+          .map((section, index) => ({ item: section, index }))
+          .sort(compareByFlowPosition)
+          .forEach(({ item: section, index }) => {
             if (isValidFlowPosition(section.flowPosition)) {
               setContextToFlowPosition(context, section.flowPosition)
             }

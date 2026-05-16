@@ -14,15 +14,15 @@ export function previewSlotIndexForPageId(
   return coverOffset + renderedIndex
 }
 
-/** Display-slot index for the sheet that contains a core section's blocks (falls back to the page's first sheet). */
-export function previewSlotIndexForCoreSection(
+/** Display-slot index for the sheet that contains a layout item's blocks (falls back to the page's first sheet). */
+export function previewSlotIndexForLayoutItem(
   renderedPages: RenderedPage[],
   pageId: string,
-  sectionId: string,
+  itemId: string,
   options: { hasFrontCover?: boolean } = {},
 ): number | null {
   const renderedIndex = renderedPages.findIndex(
-    (page) => page.sourcePageId === pageId && page.blocks.some((block) => block.sectionId === sectionId),
+    (page) => page.sourcePageId === pageId && page.blocks.some((block) => block.sectionId === itemId),
   )
   if (renderedIndex >= 0) {
     const coverOffset = options.hasFrontCover ? 1 : 0
@@ -30,3 +30,6 @@ export function previewSlotIndexForCoreSection(
   }
   return previewSlotIndexForPageId(renderedPages, pageId, options)
 }
+
+/** @deprecated Use previewSlotIndexForLayoutItem */
+export const previewSlotIndexForCoreSection = previewSlotIndexForLayoutItem
