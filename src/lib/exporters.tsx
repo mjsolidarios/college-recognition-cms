@@ -1,7 +1,14 @@
-import { getRenderedBlockLines } from '@/lib/layout'
-import { PDF_EXPORT_FAILURE_MESSAGE, type PdfExportWorkerRequest, type PdfExportWorkerResponse } from '@/lib/pdf-worker-protocol'
+import { getRenderedBlockLines } from '@/lib/rendered-block-text'
+import {
+  PDF_EXPORT_FAILURE_MESSAGE,
+  type PdfExportProgress,
+  type PdfExportWorkerRequest,
+  type PdfExportWorkerResponse,
+} from '@/lib/pdf-worker-protocol'
 import { downloadFile, slugify } from '@/lib/utils'
 import { PAGE_HEIGHT, PAGE_WIDTH, type RenderedPage } from '@/types/cms'
+
+export type { PdfExportProgress }
 
 function escapeXml(value: string) {
   return value
@@ -12,7 +19,6 @@ function escapeXml(value: string) {
     .replaceAll("'", '&apos;')
 }
 
-/** Coordinates are in the SVG group translated by page offset — do not double-apply vertical offset here. */
 function renderSvgBlock(block: RenderedPage['blocks'][number]) {
   const blockY = block.y
   const textAnchor = block.align === 'center' ? 'middle' : block.align === 'right' ? 'end' : 'start'
@@ -29,14 +35,14 @@ let pdfExportRequestCounter = 0
 
 function getPdfExportWorker() {
   if (!pdfExportWorker) {
-    try {
-      pdfExportWorker = new Worker(new URL('./pdf-export.worker.tsx', import.meta.url), { type: 'module' })
-    } catch (error) {
-      throw new Error('Failed to initialize the PDF export worker.', { cause: error })
-    }
+    pdfExportWorker = new Worker(new URL('./pdf-export.worker.tsx', import.meta.url), { type: 'module' })
   }
-
   return pdfExportWorker
+}
+
+/** Load the PDF worker early so the first export does not pay the startup cost. */
+export function warmPdfExportWorker() {
+  getPdfExportWorker()
 }
 
 function createPdfExportRequestId() {
@@ -44,16 +50,31 @@ function createPdfExportRequestId() {
   return globalThis.crypto?.randomUUID?.() ?? `pdf-export-${Date.now()}-${pdfExportRequestCounter}`
 }
 
-function renderPdfInWorker(pages: RenderedPage[]) {
+function renderPdfInWorker(pages: RenderedPage[], onProgress: (progress: PdfExportProgress) => void) {
   return new Promise<Blob>((resolve, reject) => {
     const worker = getPdfExportWorker()
     const requestId = createPdfExportRequestId()
+    const total = pages.length
+
+    onProgress({
+      phase: 'prepare',
+      current: 0,
+      total,
+      message: 'Starting export…',
+    })
+
     const cleanup = () => {
       worker.removeEventListener('message', handleMessage)
       worker.removeEventListener('error', handleError)
     }
+
     const handleMessage = (event: MessageEvent<PdfExportWorkerResponse>) => {
       if (event.data.id !== requestId) {
+        return
+      }
+
+      if (event.data.type === 'progress') {
+        onProgress(event.data.progress)
         return
       }
 
@@ -66,9 +87,10 @@ function renderPdfInWorker(pages: RenderedPage[]) {
 
       resolve(new Blob([event.data.buffer], { type: 'application/pdf' }))
     }
+
     const handleError = (event: ErrorEvent) => {
       cleanup()
-      reject(event.error instanceof Error ? event.error : new Error(`PDF export worker error: ${event.message || PDF_EXPORT_FAILURE_MESSAGE}`))
+      reject(event.error instanceof Error ? event.error : new Error(event.message || PDF_EXPORT_FAILURE_MESSAGE))
     }
 
     worker.addEventListener('message', handleMessage)
@@ -77,21 +99,32 @@ function renderPdfInWorker(pages: RenderedPage[]) {
   })
 }
 
-async function renderPdfOnMainThread(pages: RenderedPage[]) {
-  const pdfRenderModule = await import('@/lib/pdf-render')
-  return pdfRenderModule.renderPdfBlob(pages)
+async function renderPdfOnMainThread(pages: RenderedPage[], onProgress: (progress: PdfExportProgress) => void) {
+  const total = pages.length
+  onProgress({ phase: 'prepare', current: 0, total, message: 'Loading PDF engine…' })
+  const { renderPdfBlob } = await import('@/lib/pdf-render')
+  onProgress({ phase: 'render', current: 0, total, message: 'Rendering PDF…' })
+  const blob = await renderPdfBlob(pages)
+  onProgress({ phase: 'save', current: total, total, message: 'Preparing download…' })
+  return blob
 }
 
-export async function exportPdfDocument(pages: RenderedPage[], title: string) {
+export async function exportPdfDocument(
+  pages: RenderedPage[],
+  title: string,
+  onProgress?: (progress: PdfExportProgress) => void,
+) {
+  const report = onProgress ?? (() => {})
   let blob: Blob
 
   try {
-    blob = await renderPdfInWorker(pages)
+    blob = await renderPdfInWorker(pages, report)
   } catch (error) {
     console.warn('PDF export worker failed; retrying on the main thread.', error)
-    blob = await renderPdfOnMainThread(pages)
+    blob = await renderPdfOnMainThread(pages, report)
   }
 
+  report({ phase: 'save', current: pages.length, total: pages.length, message: 'Saving file…' })
   downloadFile(blob, `${slugify(title) || 'college-recognition'}.pdf`)
 }
 
@@ -110,8 +143,7 @@ export function exportSvgDocument(pages: RenderedPage[], title: string) {
 </svg>`
 
   const base = slugify(title) || 'college-recognition'
-  const fileName =
-    pages.length === 1 ? `${base}-page-${pages[0]?.pageNumber ?? 1}` : `${base}`
+  const fileName = pages.length === 1 ? `${base}-page-${pages[0]?.pageNumber ?? 1}` : `${base}`
 
   downloadFile(new Blob([markup], { type: 'image/svg+xml;charset=utf-8' }), `${fileName}.svg`)
 }

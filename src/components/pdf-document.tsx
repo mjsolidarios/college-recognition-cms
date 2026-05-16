@@ -1,6 +1,6 @@
 import { Document, Font, Page, StyleSheet, Text } from '@react-pdf/renderer'
 
-import { getRenderedBlockLines } from '@/lib/layout'
+import { getRenderedBlockLines } from '@/lib/rendered-block-text'
 import { PAGE_HEIGHT, PAGE_WIDTH, type RenderedPage } from '@/types/cms'
 
 Font.registerHyphenationCallback((word) => [word])

@@ -98,16 +98,8 @@ function getColumnX(settings: CmsSettings, column: 0 | 1) {
   return settings.pagePaddingX + column * (columnWidth + settings.columnGap)
 }
 
-function transformLineForRender(text: string, uppercase?: boolean) {
-  if (text.length === 0) {
-    return text
-  }
-  return uppercase ? text.toUpperCase() : text
-}
-
-export function getRenderedBlockLines(block: RenderTextBlock) {
-  return block.lines.map((line) => transformLineForRender(line, block.uppercase))
-}
+export { getRenderedBlockLines } from '@/lib/rendered-block-text'
+import { transformLineForRender } from '@/lib/rendered-block-text'
 
 function getPageTitleBlocks(page: CmsPage, settings: CmsSettings, pageNumber: number): RenderTextBlock[] {
   const scale = getScale(settings)

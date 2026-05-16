@@ -1,5 +1,17 @@
-import { BookOpen, ChevronDown, Download, FileImage, FileText, GripVertical, LayoutGrid, Pencil, RefreshCw, RotateCcw } from 'lucide-react'
-import { useCallback, useMemo, useRef, useState } from 'react'
+import {
+  BookOpen,
+  ChevronDown,
+  Download,
+  FileImage,
+  FileText,
+  GripVertical,
+  LayoutGrid,
+  Loader2,
+  Pencil,
+  RefreshCw,
+  RotateCcw,
+} from 'lucide-react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { CanvasPreview } from '@/components/canvas-preview'
 import { ExportDialog, ImportDialog } from '@/components/import-export-dialog'
@@ -12,7 +24,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { renderDocument } from '@/lib/layout'
 import { defaultSettings, seedPages } from '@/lib/sample-data'
 import { deletePage, getPages, getSettings, savePage, saveSettings } from '@/lib/storage'
-import { exportPdfDocument, exportSvgDocument } from '@/lib/exporters'
+import { exportPdfDocument, exportSvgDocument, warmPdfExportWorker } from '@/lib/exporters'
+import { progressPercent, type PdfExportProgress } from '@/lib/pdf-worker-protocol'
 import type { CmsPage, CmsSettings, PageType } from '@/types/cms'
 
 const PAGE_LABELS: Record<PageType, string> = {
@@ -202,6 +215,7 @@ function App() {
   const [activePageId, setActivePageId] = useState(() => getPages()[0]?.id ?? '')
   const [documentTitle, setDocumentTitle] = useState('College Recognition Program')
   const [isExporting, setIsExporting] = useState(false)
+  const [pdfExportProgress, setPdfExportProgress] = useState<PdfExportProgress | null>(null)
   const [mobileTab, setMobileTab] = useState<MobileTab>('canvas')
   const [editorWidth, setEditorWidth] = useState(DEFAULT_EDITOR_WIDTH)
   const dragRef = useRef<{ startX: number; startWidth: number } | null>(null)
@@ -214,6 +228,14 @@ function App() {
   )
 
   const renderedPages = useMemo(() => renderDocument(pages, settings), [pages, settings])
+
+  useEffect(() => {
+    setPreviewPageIndex((i) => (renderedPages.length === 0 ? 0 : Math.min(i, renderedPages.length - 1)))
+  }, [renderedPages.length])
+
+  useEffect(() => {
+    warmPdfExportWorker()
+  }, [])
 
   const persistPages = (nextPages: CmsPage[]) => {
     const orderedPages = [...nextPages].sort((left, right) => left.order - right.order)
@@ -267,12 +289,20 @@ function App() {
   }
 
   const handleExportPdf = async () => {
+    const total = renderedPages.length
     setIsExporting(true)
+    setPdfExportProgress({
+      phase: 'prepare',
+      current: 0,
+      total,
+      message: 'Starting export…',
+    })
     try {
       await waitForUiUpdate()
-      await exportPdfDocument(renderedPages, documentTitle)
+      await exportPdfDocument(renderedPages, documentTitle, setPdfExportProgress)
     } finally {
       setIsExporting(false)
+      setPdfExportProgress(null)
     }
   }
 
@@ -551,16 +581,39 @@ function App() {
               </Button>
               <ExportDialog pages={pages} settings={settings} title={documentTitle} />
               <ImportDialog pages={pages} onImport={handleImport} />
-              <Button
-                type="button"
-                size="sm"
-                className="h-9 px-3 text-xs"
-                onClick={handleExportPdf}
-                disabled={isExporting}
-              >
-                <Download className="size-3.5" />
-                {isExporting ? 'Exporting…' : 'Export PDF'}
-              </Button>
+              <div className="flex min-w-[7.5rem] flex-col items-stretch gap-1">
+                <Button
+                  type="button"
+                  size="sm"
+                  className="h-9 px-3 text-xs"
+                  onClick={handleExportPdf}
+                  disabled={isExporting || renderedPages.length === 0}
+                >
+                  {isExporting ? (
+                    <Loader2 className="size-3.5 animate-spin" />
+                  ) : (
+                    <Download className="size-3.5" />
+                  )}
+                  <span className="max-w-[9rem] truncate">
+                    {isExporting ? (pdfExportProgress?.message ?? 'Exporting…') : 'Export PDF'}
+                  </span>
+                </Button>
+                {isExporting && pdfExportProgress ? (
+                  <div
+                    className="h-1 overflow-hidden rounded-full bg-[var(--surface-strong)]"
+                    role="progressbar"
+                    aria-valuemin={0}
+                    aria-valuemax={100}
+                    aria-valuenow={progressPercent(pdfExportProgress)}
+                    aria-label={pdfExportProgress.message}
+                  >
+                    <div
+                      className="h-full rounded-full bg-[var(--color-primary)] transition-[width] duration-300 ease-out"
+                      style={{ width: `${progressPercent(pdfExportProgress)}%` }}
+                    />
+                  </div>
+                ) : null}
+              </div>
             </div>
           </div>
         </header>
