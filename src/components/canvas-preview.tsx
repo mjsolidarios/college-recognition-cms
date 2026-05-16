@@ -28,6 +28,10 @@ function clampNumber(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value))
 }
 
+function inferColumnFromHorizontalBounds(left: number, right: number): 0 | 1 {
+  return ((left + right) / 2 >= PAGE_CENTER_X ? 1 : 0) as 0 | 1
+}
+
 function flowFromPlacement(
   localPageIndex: number,
   column: 0 | 1,
@@ -255,6 +259,39 @@ export function CanvasPreview({
   const safeIdx = Math.min(previewPageIndex, Math.max(0, totalSlots - 1))
   const currentSlot = displaySlots[safeIdx]
 
+  const coreSectionStartFlowById = useMemo(() => {
+    const startById = new Map<string, number>()
+    if (!currentSlot || currentSlot.kind !== 'page' || currentSlot.page.sourcePageType !== 'core') {
+      return startById
+    }
+
+    const sourcePageId = currentSlot.page.sourcePageId
+    for (const renderedPage of renderedPages) {
+      if (renderedPage.sourcePageType !== 'core' || renderedPage.sourcePageId !== sourcePageId) {
+        continue
+      }
+      for (const block of renderedPage.blocks) {
+        if (!block.sectionId) {
+          continue
+        }
+        const column = inferColumnFromHorizontalBounds(block.x, block.x + block.width)
+        const flow = flowFromPlacement(
+          renderedPage.sourcePageLocalIndex,
+          column,
+          block.y,
+          renderedPage.contentTop,
+          renderedPage.maxContentY,
+        )
+        const currentStart = startById.get(block.sectionId)
+        if (currentStart === undefined || flow < currentStart) {
+          startById.set(block.sectionId, flow)
+        }
+      }
+    }
+
+    return startById
+  }, [currentSlot, renderedPages])
+
   const coreSectionOverlays = useMemo(() => {
     if (!currentSlot || currentSlot.kind !== 'page' || currentSlot.page.sourcePageType !== 'core') {
       return []
@@ -271,16 +308,14 @@ export function CanvasPreview({
       const top = Math.min(...blocks.map((b) => b.y))
       const right = Math.max(...blocks.map((b) => b.x + b.width))
       const bottom = Math.max(...blocks.map((b) => b.y + b.lines.length * b.lineHeight))
-      // Core sections are anchored to one active column at a time in flow layout; if a section bbox midpoint is past page centerline,
-      // we anchor it to column 1 (right), otherwise column 0 (left).
-      const column = ((left + right) / 2 >= PAGE_CENTER_X ? 1 : 0) as 0 | 1
-      const flowPosition = flowFromPlacement(
+      const fallbackFlow = flowFromPlacement(
         currentSlot.page.sourcePageLocalIndex,
-        column,
+        inferColumnFromHorizontalBounds(left, right),
         top,
         currentSlot.page.contentTop,
         currentSlot.page.maxContentY,
       )
+      const flowPosition = coreSectionStartFlowById.get(sectionId) ?? fallbackFlow
       return {
         sectionId,
         left,
@@ -290,7 +325,7 @@ export function CanvasPreview({
         flowPosition,
       }
     })
-  }, [currentSlot])
+  }, [coreSectionStartFlowById, currentSlot])
 
   const goToPrev = () => onPreviewPageChange(Math.max(0, safeIdx - 1))
   const goToNext = () => onPreviewPageChange(Math.min(totalSlots - 1, safeIdx + 1))
