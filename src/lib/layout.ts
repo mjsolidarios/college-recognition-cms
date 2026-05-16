@@ -286,7 +286,13 @@ function addLinesToFlow(context: LayoutContext, options: TextOptions) {
 
   while (remainingLines.length > 0) {
     const availableHeight = context.maxContentY - context.currentY[context.currentColumn]
-    const availableLines = Math.max(1, Math.floor(availableHeight / lineHeight))
+    const availableLines = Math.floor(availableHeight / lineHeight)
+
+    if (availableLines <= 0) {
+      advanceFlow(context)
+      continue
+    }
+
     const visibleLines = remainingLines.slice(0, availableLines)
 
     context.renderedPages[context.currentPageIndex].blocks.push({
