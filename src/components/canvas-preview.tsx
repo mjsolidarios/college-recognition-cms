@@ -1,18 +1,55 @@
 import { ChevronLeft, ChevronRight, Minus, Plus } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 
 import { Button } from '@/components/ui/button'
 import { getFontStack } from '@/lib/fonts'
+import { FLOW_POSITION_SNAP_INCREMENT, snapFlowPosition } from '@/lib/flow-position'
 import { getRenderedBlockLines } from '@/lib/layout'
 import { cn } from '@/lib/utils'
 import { PAGE_HEIGHT, PAGE_WIDTH, type RenderedPage } from '@/types/cms'
 
 const RULER_SIZE = 24
 const RULER_FONT = `7.5px 'JetBrains Mono', 'Fira Code', monospace`
+const PAGE_CENTER_X = PAGE_WIDTH / 2
 
 /** DOM height required to show all precomputed lines for a text block at the current zoom level. */
 function getBlockPreviewHeight(block: RenderedPage['blocks'][number], zoom: number) {
   return block.lines.length * block.lineHeight * zoom
+}
+
+function clampNumber(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, value))
+}
+
+function flowFromPlacement(
+  localPageIndex: number,
+  column: 0 | 1,
+  y: number,
+  contentTop: number,
+  maxContentY: number,
+) {
+  const columnHeight = Math.max(1, maxContentY - contentTop)
+  const yInColumn = clampNumber(y - contentTop, 0, columnHeight)
+  return localPageIndex * columnHeight * 2 + column * columnHeight + yInColumn
+}
+
+function placementFromFlow(flowPosition: number, contentTop: number, maxContentY: number) {
+  const columnHeight = Math.max(1, maxContentY - contentTop)
+  const safeFlow = Math.max(0, flowPosition)
+  const pageSpan = columnHeight * 2
+  const localPageIndex = Math.floor(safeFlow / pageSpan)
+  const withinPage = safeFlow - localPageIndex * pageSpan
+  const column = (withinPage >= columnHeight ? 1 : 0) as 0 | 1
+  const y = contentTop + withinPage - (column === 1 ? columnHeight : 0)
+  return { localPageIndex, column, y }
+}
+
+function isSectionActive(
+  sectionDrag: { pageId: string; sectionId: string } | null,
+  sectionId: string,
+  pageId: string,
+) {
+  return sectionDrag?.sectionId === sectionId && sectionDrag.pageId === pageId
 }
 
 function HorizontalRuler({ zoom, panX, maxVal }: { zoom: number; panX: number; maxVal: number }) {
@@ -169,17 +206,29 @@ export function CanvasPreview({
   onPreviewPageChange,
   frontCover,
   backCover,
+  onCoreSectionReposition,
 }: {
   renderedPages: RenderedPage[]
   previewPageIndex: number
   onPreviewPageChange: (index: number) => void
   frontCover?: string | null
   backCover?: string | null
+  onCoreSectionReposition?: (pageId: string, sectionId: string, flowPosition: number) => void
 }) {
   const [zoom, setZoom] = useState(0.85)
   const [pan, setPan] = useState({ x: 100, y: 50 })
   const [isSpaceDown, setIsSpaceDown] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
+  const [sectionDrag, setSectionDrag] = useState<{
+    pageId: string
+    sectionId: string
+    pointerId: number
+    startClientY: number
+    startFlow: number
+    flow: number
+    contentTop: number
+    maxContentY: number
+  } | null>(null)
 
   // Build display slots: optional front cover, content pages, optional back cover
   type DisplaySlot = { kind: 'cover'; dataUrl: string; label: string } | { kind: 'page'; page: RenderedPage }
@@ -195,6 +244,43 @@ export function CanvasPreview({
 
   const safeIdx = Math.min(previewPageIndex, Math.max(0, totalSlots - 1))
   const currentSlot = displaySlots[safeIdx]
+
+  const coreSectionOverlays = useMemo(() => {
+    if (!currentSlot || currentSlot.kind !== 'page' || currentSlot.page.sourcePageType !== 'core') {
+      return []
+    }
+    const grouped = new Map<string, RenderedPage['blocks']>()
+    for (const block of currentSlot.page.blocks) {
+      if (!block.sectionId) continue
+      const list = grouped.get(block.sectionId) ?? []
+      list.push(block)
+      grouped.set(block.sectionId, list)
+    }
+    return [...grouped.entries()].map(([sectionId, blocks]) => {
+      const left = Math.min(...blocks.map((b) => b.x))
+      const top = Math.min(...blocks.map((b) => b.y))
+      const right = Math.max(...blocks.map((b) => b.x + b.width))
+      const bottom = Math.max(...blocks.map((b) => b.y + b.lines.length * b.lineHeight))
+      // Core sections are anchored to one active column at a time in flow layout; if a section bbox midpoint is past page centerline,
+      // we anchor it to column 1 (right), otherwise column 0 (left).
+      const column = ((left + right) / 2 >= PAGE_CENTER_X ? 1 : 0) as 0 | 1
+      const flowPosition = flowFromPlacement(
+        currentSlot.page.sourcePageLocalIndex,
+        column,
+        top,
+        currentSlot.page.contentTop,
+        currentSlot.page.maxContentY,
+      )
+      return {
+        sectionId,
+        left,
+        top,
+        width: Math.max(8, right - left),
+        height: Math.max(8, bottom - top),
+        flowPosition,
+      }
+    })
+  }, [currentSlot])
 
   const goToPrev = () => onPreviewPageChange(Math.max(0, safeIdx - 1))
   const goToNext = () => onPreviewPageChange(Math.min(totalSlots - 1, safeIdx + 1))
@@ -282,8 +368,69 @@ export function CanvasPreview({
   const handlePointerUp = (e: React.PointerEvent) => {
     setIsDragging(false)
     lastPointerRef.current = null
-    e.currentTarget.releasePointerCapture(e.pointerId)
+    if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+      e.currentTarget.releasePointerCapture(e.pointerId)
+    }
   }
+
+  const handleSectionPointerDown = (
+    e: React.PointerEvent<HTMLButtonElement>,
+    sectionId: string,
+    flowPosition: number,
+  ) => {
+    if (!currentSlot || currentSlot.kind !== 'page' || currentSlot.page.sourcePageType !== 'core') {
+      return
+    }
+    if (isSpaceDown || e.button !== 0) {
+      return
+    }
+    e.preventDefault()
+    e.stopPropagation()
+    e.currentTarget.setPointerCapture(e.pointerId)
+    setSectionDrag({
+      pageId: currentSlot.page.sourcePageId,
+      sectionId,
+      pointerId: e.pointerId,
+      startClientY: e.clientY,
+      startFlow: flowPosition,
+      flow: flowPosition,
+      contentTop: currentSlot.page.contentTop,
+      maxContentY: currentSlot.page.maxContentY,
+    })
+  }
+
+  const handleSectionPointerMove = (e: React.PointerEvent<HTMLButtonElement>) => {
+    setSectionDrag((prev) => {
+      if (!prev || prev.pointerId !== e.pointerId) {
+        return prev
+      }
+      e.preventDefault()
+      e.stopPropagation()
+      // Convert pointer movement from screen px back to document-space px, so drag behavior stays correct at any zoom.
+      const deltaY = (e.clientY - prev.startClientY) / zoom
+      const snapped = snapFlowPosition(prev.startFlow + deltaY, FLOW_POSITION_SNAP_INCREMENT)
+      return { ...prev, flow: Math.max(0, snapped) }
+    })
+  }
+
+  const handleSectionPointerUp = (e: React.PointerEvent<HTMLButtonElement>) => {
+    setSectionDrag((prev) => {
+      if (!prev || prev.pointerId !== e.pointerId) {
+        return prev
+      }
+      if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+        e.currentTarget.releasePointerCapture(e.pointerId)
+      }
+      onCoreSectionReposition?.(prev.pageId, prev.sectionId, prev.flow)
+      return null
+    })
+    e.stopPropagation()
+  }
+
+  const activeGuide =
+    sectionDrag && currentSlot?.kind === 'page'
+      ? placementFromFlow(sectionDrag.flow, sectionDrag.contentTop, sectionDrag.maxContentY)
+      : null
 
   const cursorClass = isDragging ? 'cursor-grabbing' : isSpaceDown ? 'cursor-grab' : 'cursor-default'
 
@@ -426,6 +573,52 @@ export function CanvasPreview({
                   {getRenderedBlockLines(block).join('\n')}
                 </div>
               ))}
+              {currentSlot.page.sourcePageType === 'core' &&
+                coreSectionOverlays.map((overlay) => {
+                  const isActive = isSectionActive(sectionDrag, overlay.sectionId, currentSlot.page.sourcePageId)
+                  const translateY = isActive && sectionDrag ? (sectionDrag.flow - sectionDrag.startFlow) * zoom : 0
+                  return (
+                    <button
+                      key={`drag-${overlay.sectionId}`}
+                      type="button"
+                      className={cn(
+                        'absolute rounded border bg-transparent transition-colors',
+                        isSpaceDown ? 'pointer-events-none' : 'cursor-ns-resize',
+                        isActive
+                          ? 'border-[var(--color-primary)] bg-[color:color-mix(in_srgb,var(--color-primary)_8%,transparent)]'
+                          : 'border-transparent hover:border-[var(--color-hairline-strong)]',
+                      )}
+                      style={{
+                        left: overlay.left * zoom,
+                        top: overlay.top * zoom,
+                        width: overlay.width * zoom,
+                        height: overlay.height * zoom,
+                        transform: `translateY(${translateY}px)`,
+                      }}
+                      title="Drag to reposition section"
+                      onPointerDown={(e) => handleSectionPointerDown(e, overlay.sectionId, overlay.flowPosition)}
+                      onPointerMove={handleSectionPointerMove}
+                      onPointerUp={handleSectionPointerUp}
+                      onPointerCancel={handleSectionPointerUp}
+                    />
+                  )
+                })}
+              {currentSlot.page.sourcePageType === 'core' &&
+                activeGuide &&
+                activeGuide.localPageIndex === currentSlot.page.sourcePageLocalIndex && (
+                  <>
+                    <div
+                      className="pointer-events-none absolute left-0 right-0 z-20 border-t border-dashed border-[var(--color-primary)]"
+                      style={{ top: activeGuide.y * zoom }}
+                    />
+                    <div
+                      className="pointer-events-none absolute z-20 rounded bg-[var(--color-primary)] px-1.5 py-0.5 text-[10px] font-semibold text-white"
+                      style={{ left: 4, top: activeGuide.y * zoom + 2 }}
+                    >
+                      Y {Math.round(activeGuide.y)}
+                    </div>
+                  </>
+                )}
             </div>
           ) : (
             <div className="absolute left-0 top-0 translate-x-[100px] translate-y-[50px]">

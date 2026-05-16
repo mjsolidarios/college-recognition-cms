@@ -11,6 +11,7 @@ import type {
 } from '@/types/cms'
 import { PAGE_HEIGHT, PAGE_WIDTH } from '@/types/cms'
 import { getFontStack } from '@/lib/fonts'
+import { isValidFlowPosition } from '@/lib/flow-position'
 
 /** Space between title block and first body column (tighter to match print brochure). */
 const TITLE_GAP = 16
@@ -60,6 +61,7 @@ type TextOptions = {
   reserveHeight?: number
   /** Minimum number of lines to place in non-final split fragments. */
   minFragmentLines?: number
+  sectionId?: string
 }
 
 type MeasureOptions = {
@@ -316,12 +318,22 @@ function wrapText(text: string, width: number, options: MeasureOptions) {
   return lines
 }
 
-function createRenderedPage(page: CmsPage, settings: CmsSettings, pageNumber: number): RenderedPage {
+function createRenderedPage(
+  page: CmsPage,
+  settings: CmsSettings,
+  pageNumber: number,
+  sourcePageLocalIndex: number,
+  contentTop: number,
+  maxContentY: number,
+): RenderedPage {
   return {
     id: `${page.id}-${pageNumber}`,
     sourcePageId: page.id,
     sourcePageType: page.type,
+    sourcePageLocalIndex,
     pageNumber,
+    contentTop,
+    maxContentY,
     blocks: getPageTitleBlocks(page, settings, pageNumber),
   }
 }
@@ -339,14 +351,15 @@ function getContentTop(page: CmsPage, settings: CmsSettings) {
 
 function createLayoutContext(page: CmsPage, settings: CmsSettings, pageNumber: number): LayoutContext {
   const contentTop = getContentTop(page, settings)
-  const firstPage = createRenderedPage(page, settings, pageNumber)
+  const maxContentY = PAGE_HEIGHT - settings.pagePaddingBottom
+  const firstPage = createRenderedPage(page, settings, pageNumber, 0, contentTop, maxContentY)
   return {
     renderedPages: [firstPage],
     logicalPage: page,
     settings,
     columnWidth: getColumnWidth(settings),
     contentTop,
-    maxContentY: PAGE_HEIGHT - settings.pagePaddingBottom,
+    maxContentY,
     currentPageIndex: 0,
     currentColumn: 0,
     currentY: [contentTop, contentTop],
@@ -355,7 +368,16 @@ function createLayoutContext(page: CmsPage, settings: CmsSettings, pageNumber: n
 
 function advanceToNextPage(context: LayoutContext) {
   const nextPageNumber = context.renderedPages.at(-1)!.pageNumber + 1
-  context.renderedPages.push(createRenderedPage(context.logicalPage, context.settings, nextPageNumber))
+  context.renderedPages.push(
+    createRenderedPage(
+      context.logicalPage,
+      context.settings,
+      nextPageNumber,
+      context.currentPageIndex + 1,
+      context.contentTop,
+      context.maxContentY,
+    ),
+  )
   context.currentPageIndex += 1
   context.currentColumn = 0
   context.currentY = [context.contentTop, context.contentTop]
@@ -453,6 +475,7 @@ function addLinesToFlow(context: LayoutContext, options: TextOptions) {
   } = resolved
   const reserveHeight = options.reserveHeight ?? 0
   const maxContentHeight = context.maxContentY - context.contentTop
+  const sectionId = options.sectionId
 
   const resolveColumn = (): 0 | 1 => (pinned !== undefined ? pinned : context.currentColumn)
 
@@ -503,6 +526,7 @@ function addLinesToFlow(context: LayoutContext, options: TextOptions) {
         align,
         uppercase,
         letterSpacing,
+        sectionId,
       })
       context.currentY[col] += height + blockSpacing
       return
@@ -549,6 +573,7 @@ function addLinesToFlow(context: LayoutContext, options: TextOptions) {
       align,
       uppercase,
       letterSpacing,
+      sectionId,
     })
 
     context.currentY[col] += visibleLines.length * lineHeight + (isLastFragment ? blockSpacing : 0)
@@ -561,6 +586,27 @@ function addLinesToFlow(context: LayoutContext, options: TextOptions) {
   }
 }
 
+function setContextToFlowPosition(context: LayoutContext, flowPosition: number) {
+  const columnHeight = context.maxContentY - context.contentTop
+  if (columnHeight <= 0) {
+    return
+  }
+  const safeFlow = Math.max(0, flowPosition)
+  const columnsPerPage = 2
+  const pageSpan = columnHeight * columnsPerPage
+  const pageOffset = Math.floor(safeFlow / pageSpan)
+  const withinPage = safeFlow - pageOffset * pageSpan
+  const column = (withinPage >= columnHeight ? 1 : 0) as 0 | 1
+  const yInColumn = withinPage - (column === 1 ? columnHeight : 0)
+
+  while (context.currentPageIndex < pageOffset) {
+    advanceToNextPage(context)
+  }
+
+  context.currentColumn = column
+  context.currentY[column] = context.contentTop + yInColumn
+}
+
 type SectionHeadingOptions = {
   uppercase?: boolean
   /** Document-space px after heading (tighter for short officer blocks). */
@@ -571,11 +617,12 @@ type SectionHeadingOptions = {
 function addSectionHeading(
   context: LayoutContext,
   text: string,
-  index: number,
+  key: string,
+  sectionId: string,
   options?: SectionHeadingOptions,
 ) {
   addLinesToFlow(context, {
-    idPrefix: `section-heading-${index}`,
+    idPrefix: `section-heading-${key}`,
     text,
     fontSize: context.settings.headingSize,
     textRole: 'heading',
@@ -584,6 +631,7 @@ function addSectionHeading(
     allowSplit: false,
     uppercase: options?.uppercase === true,
     reserveHeight: options?.reserveHeight,
+    sectionId,
   })
 }
 
@@ -635,14 +683,14 @@ function segmentCoreBodyForLayout(body: string): { text: string; indent: boolean
   return out
 }
 
-function renderCoreSection(context: LayoutContext, section: CoreSection, index: number) {
+function renderCoreSection(context: LayoutContext, section: CoreSection, sectionKey: string) {
   const trimmedTitle = section.title.trim()
   const segments = segmentCoreBodyForLayout(section.body).filter((seg) => seg.text.trim())
   const firstBodyReserve = segments.length
     ? estimateTextHeight(
         context,
         {
-          idPrefix: `section-body-${index}-reserve`,
+          idPrefix: `section-body-${sectionKey}-reserve`,
           text: segments[0].text,
           fontSize: context.settings.bodySize,
           indent: segments[0].indent ? CORE_LIST_INDENT : undefined,
@@ -654,7 +702,7 @@ function renderCoreSection(context: LayoutContext, section: CoreSection, index: 
   if (trimmedTitle) {
     const headingUppercase = !/^(Dean|College Secretary)$/i.test(trimmedTitle)
     const tightOfficerHeading = /^College Secretary$/i.test(trimmedTitle)
-    addSectionHeading(context, section.title, index, {
+    addSectionHeading(context, section.title, sectionKey, section.id, {
       uppercase: headingUppercase,
       spacingAfter: tightOfficerHeading ? 1 : undefined,
       reserveHeight: firstBodyReserve,
@@ -663,12 +711,13 @@ function renderCoreSection(context: LayoutContext, section: CoreSection, index: 
   segments.forEach((seg, segIndex) => {
     const isLast = segIndex === segments.length - 1
     addLinesToFlow(context, {
-      idPrefix: `section-body-${index}-${segIndex}`,
+      idPrefix: `section-body-${sectionKey}-${segIndex}`,
       text: seg.text,
       fontSize: context.settings.bodySize,
       spacingAfter: isLast ? SECTION_GAP : PARAGRAPH_GAP,
       indent: seg.indent ? CORE_LIST_INDENT : undefined,
       minFragmentLines: 2,
+      sectionId: section.id,
     })
   })
 }
@@ -830,6 +879,19 @@ function renderNonAcademicPage(context: LayoutContext, entries: NonAcademicEntry
   }
 }
 
+function compareSectionsByFlowPosition(
+  left: { section: CoreSection; index: number },
+  right: { section: CoreSection; index: number },
+) {
+  const leftFlow = isValidFlowPosition(left.section.flowPosition) ? left.section.flowPosition : undefined
+  const rightFlow = isValidFlowPosition(right.section.flowPosition) ? right.section.flowPosition : undefined
+  if (leftFlow === undefined && rightFlow === undefined) return left.index - right.index
+  if (leftFlow === undefined) return 1
+  if (rightFlow === undefined) return -1
+  if (leftFlow === rightFlow) return left.index - right.index
+  return leftFlow - rightFlow
+}
+
 function renderProgramPage(context: LayoutContext, rows: ProgramRow[]) {
   /**
    * Trailing gutter after each cell (~one body line: scales with typography).
@@ -983,7 +1045,15 @@ export function renderDocument(pages: CmsPage[], settings: CmsSettings) {
 
     switch (page.type) {
       case 'core':
-        page.content.sections.forEach((section, index) => renderCoreSection(context, section, index))
+        page.content.sections
+          .map((section, index) => ({ section, index }))
+          .sort(compareSectionsByFlowPosition)
+          .forEach(({ section, index }) => {
+            if (isValidFlowPosition(section.flowPosition)) {
+              setContextToFlowPosition(context, section.flowPosition)
+            }
+            renderCoreSection(context, section, `${section.id}-${index}`)
+          })
         break
       case 'program':
         renderProgramPage(context, page.content.rows)
