@@ -41,7 +41,7 @@ function getPdfExportWorker() {
 
 function createPdfExportRequestId() {
   pdfExportRequestCounter += 1
-  return globalThis.crypto?.randomUUID?.() ?? `pdf-export-${Date.now()}-${Math.round(performance.now() * 1000)}-${pdfExportRequestCounter}`
+  return globalThis.crypto?.randomUUID?.() ?? `pdf-export-${Date.now()}-${pdfExportRequestCounter}`
 }
 
 function renderPdfInWorker(pages: RenderedPage[]) {
