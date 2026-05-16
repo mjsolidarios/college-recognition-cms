@@ -1,4 +1,15 @@
-import { DndContext, PointerSensor, useDraggable, useDroppable, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core'
+import {
+  DndContext,
+  KeyboardSensor,
+  PointerSensor,
+  useDraggable,
+  useDroppable,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+  type DraggableAttributes,
+  type DraggableSyntheticListeners,
+} from '@dnd-kit/core'
 import { ChevronDown, GripVertical, Plus, Trash2 } from 'lucide-react'
 
 import { BulkAddAcademicDialog, BulkAddNonAcademicDialog } from '@/components/bulk-add-dialog'
@@ -34,6 +45,9 @@ const TYPE_COLORS: Record<string, string> = {
   'non-academic': 'bg-[rgb(var(--type-non-academic))]',
 }
 
+const REORDER_ACTIVATION_DISTANCE = 8
+const REORDER_DROP_TARGET_CLASS = 'ring-2 ring-[color:color-mix(in_srgb,var(--color-primary)_18%,transparent)]'
+
 function SectionLabel({ children }: { children: string }) {
   return <label className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--color-muted)]">{children}</label>
 }
@@ -57,8 +71,8 @@ function CollapsibleItemCard({
   containerRef?: (node: HTMLDivElement | null) => void
   containerStyle?: React.CSSProperties
   containerClassName?: string
-  dragListeners?: Record<string, unknown>
-  dragAttributes?: Record<string, unknown>
+  dragListeners?: DraggableSyntheticListeners
+  dragAttributes?: DraggableAttributes
   isDragging?: boolean
 }) {
   const [isOpen, setIsOpen] = useState(true)
@@ -75,11 +89,13 @@ function CollapsibleItemCard({
     >
       <button
         type="button"
-        className="flex w-full items-center gap-2 px-3 py-2.5 text-left cursor-pointer"
+        className="flex w-full items-center gap-2 px-3 py-2.5 text-left"
         onClick={() => setIsOpen(!isOpen)}
       >
         <span
           className="inline-flex cursor-grab text-[var(--color-muted-soft)] transition-colors hover:text-[var(--color-muted)]"
+          aria-label="Drag to reorder"
+          title="Drag to reorder"
           {...dragListeners}
           {...dragAttributes}
           onClick={(event) => event.stopPropagation()}
@@ -173,13 +189,20 @@ function ReorderableItemCard({
         setDraggableRef(node)
       }}
       containerStyle={style}
-      containerClassName={cn(isOver && 'ring-2 ring-[color:color-mix(in_srgb,var(--color-primary)_18%,transparent)]')}
+      containerClassName={cn(isOver && REORDER_DROP_TARGET_CLASS)}
       isDragging={isDragging}
-      dragListeners={listeners as Record<string, unknown>}
-      dragAttributes={attributes as Record<string, unknown>}
+      dragListeners={listeners}
+      dragAttributes={attributes}
     >
       {children}
     </CollapsibleItemCard>
+  )
+}
+
+function useEditorReorderSensor() {
+  return useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: REORDER_ACTIVATION_DISTANCE } }),
+    useSensor(KeyboardSensor),
   )
 }
 
@@ -223,7 +246,7 @@ function EditorChrome({ page, children }: { page: CmsPage; children: React.React
 }
 
 function ProgramEditor({ page, onChange }: { page: ProgramPage; onChange: (page: CmsPage) => void }) {
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }))
+  const sensors = useEditorReorderSensor()
   const updateRow = (rowId: string, updater: (row: ProgramRow) => ProgramRow) => {
     onChange({
       ...page,
@@ -335,7 +358,7 @@ function ProgramEditor({ page, onChange }: { page: ProgramPage; onChange: (page:
 }
 
 function AcademicEditor({ page, onChange }: { page: AcademicPage; onChange: (page: CmsPage) => void }) {
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }))
+  const sensors = useEditorReorderSensor()
   const updateEntry = (entryId: string, updater: (entry: AcademicEntry) => AcademicEntry) => {
     onChange({
       ...page,
@@ -452,7 +475,7 @@ function AcademicEditor({ page, onChange }: { page: AcademicPage; onChange: (pag
 }
 
 function NonAcademicEditor({ page, onChange }: { page: NonAcademicPage; onChange: (page: CmsPage) => void }) {
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }))
+  const sensors = useEditorReorderSensor()
   const updateEntry = (entryId: string, updater: (entry: NonAcademicEntry) => NonAcademicEntry) => {
     onChange({
       ...page,
@@ -564,7 +587,7 @@ function NonAcademicEditor({ page, onChange }: { page: NonAcademicPage; onChange
 }
 
 function CoreEditor({ page, onChange }: { page: CorePage; onChange: (page: CmsPage) => void }) {
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }))
+  const sensors = useEditorReorderSensor()
   const updateSection = (sectionId: string, updater: (section: CoreSection) => CoreSection) => {
     onChange({
       ...page,
