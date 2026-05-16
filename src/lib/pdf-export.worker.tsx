@@ -1,4 +1,4 @@
-import { PDF_EXPORT_FAILURE_MESSAGE, type PdfExportWorkerRequest, type PdfExportWorkerResponse } from '@/lib/pdf-export-worker'
+import { PDF_EXPORT_FAILURE_MESSAGE, type PdfExportWorkerRequest, type PdfExportWorkerResponse } from '@/lib/pdf-worker-protocol'
 import { renderPdfBlob } from '@/lib/pdf-render'
 
 const workerScope = globalThis
