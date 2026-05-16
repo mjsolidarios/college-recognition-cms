@@ -1,10 +1,5 @@
 import { getRenderedBlockLines } from '@/lib/rendered-block-text'
-import {
-  PDF_EXPORT_FAILURE_MESSAGE,
-  type PdfExportProgress,
-  type PdfExportWorkerRequest,
-  type PdfExportWorkerResponse,
-} from '@/lib/pdf-worker-protocol'
+import { type PdfExportProgress } from '@/lib/pdf-worker-protocol'
 import { downloadFile, slugify } from '@/lib/utils'
 import { PAGE_HEIGHT, PAGE_WIDTH, type RenderedPage } from '@/types/cms'
 
@@ -30,83 +25,9 @@ function renderSvgBlock(block: RenderedPage['blocks'][number]) {
     .join('')}</text>`
 }
 
-let pdfExportWorker: Worker | null = null
-let pdfExportRequestCounter = 0
-
-function getPdfExportWorker() {
-  if (!pdfExportWorker) {
-    pdfExportWorker = new Worker(new URL('./pdf-export.worker.tsx', import.meta.url), { type: 'module' })
-  }
-  return pdfExportWorker
-}
-
-/** Load the PDF worker early so the first export does not pay the startup cost. */
+/** Preload jsPDF so the first export does not wait on the dynamic import. */
 export function warmPdfExportWorker() {
-  getPdfExportWorker()
-}
-
-function createPdfExportRequestId() {
-  pdfExportRequestCounter += 1
-  return globalThis.crypto?.randomUUID?.() ?? `pdf-export-${Date.now()}-${pdfExportRequestCounter}`
-}
-
-function renderPdfInWorker(pages: RenderedPage[], onProgress: (progress: PdfExportProgress) => void) {
-  return new Promise<Blob>((resolve, reject) => {
-    const worker = getPdfExportWorker()
-    const requestId = createPdfExportRequestId()
-    const total = pages.length
-
-    onProgress({
-      phase: 'prepare',
-      current: 0,
-      total,
-      message: 'Starting export…',
-    })
-
-    const cleanup = () => {
-      worker.removeEventListener('message', handleMessage)
-      worker.removeEventListener('error', handleError)
-    }
-
-    const handleMessage = (event: MessageEvent<PdfExportWorkerResponse>) => {
-      if (event.data.id !== requestId) {
-        return
-      }
-
-      if (event.data.type === 'progress') {
-        onProgress(event.data.progress)
-        return
-      }
-
-      cleanup()
-
-      if (!event.data.ok) {
-        reject(new Error(event.data.error))
-        return
-      }
-
-      resolve(new Blob([event.data.buffer], { type: 'application/pdf' }))
-    }
-
-    const handleError = (event: ErrorEvent) => {
-      cleanup()
-      reject(event.error instanceof Error ? event.error : new Error(event.message || PDF_EXPORT_FAILURE_MESSAGE))
-    }
-
-    worker.addEventListener('message', handleMessage)
-    worker.addEventListener('error', handleError)
-    worker.postMessage({ id: requestId, pages } satisfies PdfExportWorkerRequest)
-  })
-}
-
-async function renderPdfOnMainThread(pages: RenderedPage[], onProgress: (progress: PdfExportProgress) => void) {
-  const total = pages.length
-  onProgress({ phase: 'prepare', current: 0, total, message: 'Loading PDF engine…' })
-  const { renderPdfBlob } = await import('@/lib/pdf-render')
-  onProgress({ phase: 'render', current: 0, total, message: 'Rendering PDF…' })
-  const blob = await renderPdfBlob(pages)
-  onProgress({ phase: 'save', current: total, total, message: 'Preparing download…' })
-  return blob
+  void import('jspdf')
 }
 
 export async function exportPdfDocument(
@@ -114,17 +35,22 @@ export async function exportPdfDocument(
   title: string,
   onProgress?: (progress: PdfExportProgress) => void,
 ) {
+  const total = pages.length
   const report = onProgress ?? (() => {})
-  let blob: Blob
 
-  try {
-    blob = await renderPdfInWorker(pages, report)
-  } catch (error) {
-    console.warn('PDF export worker failed; retrying on the main thread.', error)
-    blob = await renderPdfOnMainThread(pages, report)
-  }
+  report({ phase: 'prepare', current: 0, total, message: 'Loading PDF engine…' })
 
-  report({ phase: 'save', current: pages.length, total: pages.length, message: 'Saving file…' })
+  const { renderPdfBlob } = await import('@/lib/pdf-from-blocks')
+  const blob = await renderPdfBlob(pages, (current, pageTotal) => {
+    report({
+      phase: 'render',
+      current,
+      total: pageTotal,
+      message: pageTotal > 0 ? `Rendering page ${current + 1} of ${pageTotal}…` : 'Rendering PDF…',
+    })
+  })
+
+  report({ phase: 'save', current: total, total, message: 'Saving file…' })
   downloadFile(blob, `${slugify(title) || 'college-recognition'}.pdf`)
 }
 
