@@ -296,27 +296,30 @@ export function CanvasPreview({
     if (!currentSlot || currentSlot.kind !== 'page' || currentSlot.page.sourcePageType !== 'core') {
       return []
     }
-    const grouped = new Map<string, RenderedPage['blocks']>()
+    const grouped = new Map<string, { sectionId: string; column: 0 | 1; blocks: RenderedPage['blocks'] }>()
     for (const block of currentSlot.page.blocks) {
       if (!block.sectionId) continue
-      const list = grouped.get(block.sectionId) ?? []
-      list.push(block)
-      grouped.set(block.sectionId, list)
+      const column = inferColumnFromHorizontalBounds(block.x, block.x + block.width)
+      const key = `${block.sectionId}:${column}`
+      const entry = grouped.get(key) ?? { sectionId: block.sectionId, column, blocks: [] }
+      entry.blocks.push(block)
+      grouped.set(key, entry)
     }
-    return [...grouped.entries()].map(([sectionId, blocks]) => {
+    return [...grouped.values()].map(({ sectionId, column, blocks }) => {
       const left = Math.min(...blocks.map((b) => b.x))
       const top = Math.min(...blocks.map((b) => b.y))
       const right = Math.max(...blocks.map((b) => b.x + b.width))
       const bottom = Math.max(...blocks.map((b) => b.y + b.lines.length * b.lineHeight))
       const fallbackFlow = flowFromPlacement(
         currentSlot.page.sourcePageLocalIndex,
-        inferColumnFromHorizontalBounds(left, right),
+        column,
         top,
         currentSlot.page.contentTop,
         currentSlot.page.maxContentY,
       )
       const flowPosition = coreSectionStartFlowById.get(sectionId) ?? fallbackFlow
       return {
+        id: `${sectionId}-${column}`,
         sectionId,
         left,
         top,
@@ -665,7 +668,7 @@ export function CanvasPreview({
                       : 0
                     return (
                       <button
-                        key={`drag-${overlay.sectionId}`}
+                        key={`drag-${overlay.id}`}
                         type="button"
                         className={cn(
                           'absolute z-[2] rounded border border-[var(--color-primary)] bg-[color:color-mix(in_srgb,var(--color-primary)_8%,transparent)] ring-2 ring-[color:color-mix(in_srgb,var(--color-primary)_22%,transparent)] transition-colors',
