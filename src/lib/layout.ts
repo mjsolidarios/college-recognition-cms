@@ -19,6 +19,8 @@ const PARAGRAPH_GAP = 6
 const ITEM_GAP = 2
 /** Pixels inset for faculty name lists under “Permanent Faculty:” / “Part-time Lecturers:”. */
 const CORE_LIST_INDENT = 14
+/** Indent used when awardee names wrap to multiple lines so continuations stay nested under each award heading. */
+const AWARDEE_LIST_INDENT = 12
 const FONT_FAMILY = 'Georgia, "Times New Roman", serif'
 /** Shrink wrap width slightly so layout reserves at least as many lines as the canvas / PDF renderer. */
 const WRAP_WIDTH_INSET = 10
@@ -28,6 +30,7 @@ type LayoutContext = {
   logicalPage: CmsPage
   settings: CmsSettings
   columnWidth: number
+  contentTop: number
   maxContentY: number
   currentPageIndex: number
   currentColumn: 0 | 1
@@ -51,6 +54,33 @@ type TextOptions = {
   pinColumn?: 0 | 1
   /** Narrower wrap width + shifted x (document px); used for indented faculty lists on core pages. */
   indent?: number
+  /** Reserve document-space height after the first placed fragment to keep related content together. */
+  reserveHeight?: number
+  /** Minimum number of lines to place in non-final split fragments. */
+  minFragmentLines?: number
+}
+
+type MeasureOptions = {
+  fontSize: number
+  fontWeight: 'normal' | 'bold'
+  fontStyle?: 'normal' | 'italic'
+  letterSpacing?: number
+  uppercase?: boolean
+}
+
+type ResolvedTextLayout = {
+  fontSize: number
+  lineHeight: number
+  blockSpacing: number
+  width: number
+  lines: string[]
+  fontWeight: 'normal' | 'bold'
+  fontStyle: 'normal' | 'italic'
+  align: 'left' | 'center' | 'right'
+  uppercase?: boolean
+  letterSpacing?: number
+  pinned?: 0 | 1
+  xFor: (col: 0 | 1) => number
 }
 
 let measuringCanvas: HTMLCanvasElement | null = null
@@ -68,6 +98,17 @@ function getColumnX(settings: CmsSettings, column: 0 | 1) {
   return settings.pagePaddingX + column * (columnWidth + settings.columnGap)
 }
 
+function transformLineForRender(text: string, uppercase?: boolean) {
+  if (text.length === 0) {
+    return text
+  }
+  return uppercase ? text.toUpperCase() : text
+}
+
+export function getRenderedBlockLines(block: RenderTextBlock) {
+  return block.lines.map((line) => transformLineForRender(line, block.uppercase))
+}
+
 function getPageTitleBlocks(page: CmsPage, settings: CmsSettings, pageNumber: number): RenderTextBlock[] {
   const scale = getScale(settings)
   const titleWidth = PAGE_WIDTH - settings.pagePaddingX * 2
@@ -83,7 +124,14 @@ function getPageTitleBlocks(page: CmsPage, settings: CmsSettings, pageNumber: nu
   // preventing subsequent content blocks from overlapping the title.
   const wrappedTitleLines = page.content.heading
     .split('\n')
-    .flatMap((line) => wrapParagraph(line || ' ', titleWidth, titleFontSize, 'bold'))
+    .flatMap((line) =>
+      wrapParagraph(line || ' ', titleWidth, {
+        fontSize: titleFontSize,
+        fontWeight: 'bold',
+        letterSpacing: page.type === 'program' ? 1.8 : 0.6,
+        uppercase: page.type !== 'core',
+      }),
+    )
 
   const blocks: RenderTextBlock[] = [
     {
@@ -103,6 +151,13 @@ function getPageTitleBlocks(page: CmsPage, settings: CmsSettings, pageNumber: nu
   ]
 
   if (page.type === 'core' && page.content.subheading) {
+    const subheadingFontSize = settings.subtitleSize * scale
+    const subheadingLineHeight = settings.subtitleSize * 1.12 * scale
+    const wrappedSubheadingLines = wrapText(page.content.subheading, titleWidth, {
+      fontSize: subheadingFontSize,
+      fontWeight: 'normal',
+    })
+
     blocks.push({
       id: `${page.id}-subtitle-${pageNumber}`,
       x: settings.pagePaddingX,
@@ -111,9 +166,9 @@ function getPageTitleBlocks(page: CmsPage, settings: CmsSettings, pageNumber: nu
         blocks[0].lines.length * titleLineHeight +
         Math.round((page.type === 'core' ? 4 : 8) * scale),
       width: titleWidth,
-      lines: [page.content.subheading],
-      fontSize: settings.subtitleSize * scale,
-      lineHeight: settings.subtitleSize * (page.type === 'core' ? 1.12 : 1.25) * scale,
+      lines: wrappedSubheadingLines,
+      fontSize: subheadingFontSize,
+      lineHeight: subheadingLineHeight,
       fontWeight: 'normal',
       fontStyle: 'normal',
       align: 'center',
@@ -123,7 +178,11 @@ function getPageTitleBlocks(page: CmsPage, settings: CmsSettings, pageNumber: nu
   return blocks
 }
 
-function createMeasureContext(fontSize: number, fontWeight: 'normal' | 'bold') {
+function createMeasureContext({
+  fontSize,
+  fontWeight,
+  fontStyle = 'normal',
+}: Pick<MeasureOptions, 'fontSize' | 'fontWeight' | 'fontStyle'>) {
   if (typeof document === 'undefined') {
     return null
   }
@@ -135,39 +194,83 @@ function createMeasureContext(fontSize: number, fontWeight: 'normal' | 'bold') {
     return null
   }
 
-  context.font = `${fontWeight} ${fontSize}px ${FONT_FAMILY}`
+  context.font = `${fontStyle} ${fontWeight} ${fontSize}px ${FONT_FAMILY}`
   return context
 }
 
-function measureWidth(text: string, fontSize: number, fontWeight: 'normal' | 'bold') {
-  const context = createMeasureContext(fontSize, fontWeight)
+function measureWidth(text: string, options: MeasureOptions) {
+  const renderedText = transformLineForRender(text, options.uppercase)
+  const context = createMeasureContext(options)
 
   if (!context) {
-    return text.length * fontSize * 0.52
+    return renderedText.length * options.fontSize * 0.52
   }
 
   // Add a small safety margin to account for differences between Canvas text metrics
   // and browser DOM font rendering (kerning, letter-spacing, etc).
-  return context.measureText(text).width * 1.04 + 2
+  return (
+    context.measureText(renderedText).width * 1.04 +
+    Math.max(0, renderedText.length - 1) * (options.letterSpacing ?? 0) +
+    2
+  )
 }
 
-function wrapParagraph(
-  paragraph: string,
-  width: number,
-  fontSize: number,
-  fontWeight: 'normal' | 'bold',
-) {
+function splitLongToken(token: string, width: number, options: MeasureOptions) {
+  if (width <= 0) {
+    return [token]
+  }
+
+  const parts: string[] = []
+  let remaining = token
+
+  while (remaining) {
+    if (measureWidth(remaining, options) <= width) {
+      parts.push(remaining)
+      break
+    }
+
+    if (measureWidth(remaining[0], options) > width) {
+      parts.push(remaining[0])
+      remaining = remaining.slice(1)
+      continue
+    }
+
+    let low = 1
+    let high = remaining.length
+    let fitLength = 1
+
+    while (low <= high) {
+      const mid = Math.floor((low + high) / 2)
+      if (measureWidth(remaining.slice(0, mid), options) <= width) {
+        fitLength = mid
+        low = mid + 1
+      } else {
+        high = mid - 1
+      }
+    }
+
+    parts.push(remaining.slice(0, fitLength))
+    remaining = remaining.slice(fitLength)
+  }
+
+  return parts
+}
+
+function wrapParagraph(paragraph: string, width: number, options: MeasureOptions) {
   if (!paragraph.trim()) {
     return ['']
   }
 
-  const words = paragraph.trim().split(/\s+/)
+  const words = paragraph
+    .trim()
+    .split(/\s+/)
+    .flatMap((word) => (measureWidth(word, options) <= width ? [word] : splitLongToken(word, width, options)))
   const lines: string[] = []
   let currentLine = ''
 
   for (const word of words) {
     const candidate = currentLine ? `${currentLine} ${word}` : word
-    if (measureWidth(candidate, fontSize, fontWeight) <= width || !currentLine) {
+    if (measureWidth(candidate, options) <= width || !currentLine) {
       currentLine = candidate
       continue
     }
@@ -183,12 +286,7 @@ function wrapParagraph(
   return lines
 }
 
-function wrapText(
-  text: string,
-  width: number,
-  fontSize: number,
-  fontWeight: 'normal' | 'bold',
-) {
+function wrapText(text: string, width: number, options: MeasureOptions) {
   const normalized = text.replace(/\r\n/g, '\n').trimEnd()
   const blocks = normalized
     .split(/\n\s*\n+/)
@@ -203,7 +301,7 @@ function wrapText(
       if (!trimmed) {
         continue
       }
-      lines.push(...wrapParagraph(trimmed, width, fontSize, fontWeight))
+      lines.push(...wrapParagraph(trimmed, width, options))
     }
     if (blockIndex < blocks.length - 1) {
       lines.push('')
@@ -246,6 +344,7 @@ function createLayoutContext(page: CmsPage, settings: CmsSettings, pageNumber: n
     logicalPage: page,
     settings,
     columnWidth: getColumnWidth(settings),
+    contentTop,
     maxContentY: PAGE_HEIGHT - settings.pagePaddingBottom,
     currentPageIndex: 0,
     currentColumn: 0,
@@ -258,8 +357,7 @@ function advanceToNextPage(context: LayoutContext) {
   context.renderedPages.push(createRenderedPage(context.logicalPage, context.settings, nextPageNumber))
   context.currentPageIndex += 1
   context.currentColumn = 0
-  const contentTop = getContentTop(context.logicalPage, context.settings)
-  context.currentY = [contentTop, contentTop]
+  context.currentY = [context.contentTop, context.contentTop]
 }
 
 function advanceFlow(context: LayoutContext) {
@@ -271,7 +369,7 @@ function advanceFlow(context: LayoutContext) {
   advanceToNextPage(context)
 }
 
-function addLinesToFlow(context: LayoutContext, options: TextOptions) {
+function resolveTextLayout(context: LayoutContext, options: TextOptions): ResolvedTextLayout {
   const fontWeight = options.fontWeight ?? 'normal'
   const fontStyle = options.fontStyle ?? 'normal'
   const align = options.align ?? 'left'
@@ -285,17 +383,73 @@ function addLinesToFlow(context: LayoutContext, options: TextOptions) {
   const rawWidth = Math.max(8, columnTotal - inset)
   const wrapWidth = full ? rawWidth : Math.max(8, rawWidth - WRAP_WIDTH_INSET)
   const width = rawWidth
-  const lines = wrapText(options.text, wrapWidth, fontSize, fontWeight)
+  const lines = wrapText(options.text, wrapWidth, {
+    fontSize,
+    fontWeight,
+    fontStyle,
+    letterSpacing: options.letterSpacing,
+    uppercase: options.uppercase,
+  })
   const lineHeight = fontSize * context.settings.lineHeight
   const blockSpacing = (options.spacingAfter ?? PARAGRAPH_GAP) * scale
-  const pinned = options.pinColumn
+
+  return {
+    fontSize,
+    lineHeight,
+    blockSpacing,
+    width,
+    lines,
+    fontWeight,
+    fontStyle,
+    align,
+    uppercase: options.uppercase,
+    letterSpacing: options.letterSpacing,
+    pinned: options.pinColumn,
+    xFor: (col: 0 | 1) => {
+      const base = full ? context.settings.pagePaddingX : getColumnX(context.settings, col)
+      return base + inset
+    },
+  }
+}
+
+function estimateTextHeight(
+  context: LayoutContext,
+  options: TextOptions,
+  maxLines = Number.POSITIVE_INFINITY,
+  includeSpacing = false,
+) {
+  const resolved = resolveTextLayout(context, options)
+  const visibleLines = Math.min(resolved.lines.length, maxLines)
+  if (visibleLines === 0) {
+    return 0
+  }
+  return visibleLines * resolved.lineHeight + (includeSpacing ? resolved.blockSpacing : 0)
+}
+
+function getEffectiveReserve(contentHeight: number, reserveHeight: number, maxContentHeight: number) {
+  return contentHeight + reserveHeight <= maxContentHeight ? reserveHeight : 0
+}
+
+function addLinesToFlow(context: LayoutContext, options: TextOptions) {
+  const resolved = resolveTextLayout(context, options)
+  const {
+    fontSize,
+    lineHeight,
+    blockSpacing,
+    width,
+    lines,
+    fontWeight,
+    fontStyle,
+    align,
+    uppercase,
+    letterSpacing,
+    pinned,
+    xFor,
+  } = resolved
+  const reserveHeight = options.reserveHeight ?? 0
+  const maxContentHeight = context.maxContentY - context.contentTop
 
   const resolveColumn = (): 0 | 1 => (pinned !== undefined ? pinned : context.currentColumn)
-
-  const xFor = (col: 0 | 1) => {
-    const base = full ? context.settings.pagePaddingX : getColumnX(context.settings, col)
-    return base + inset
-  }
 
   if (pinned !== undefined) {
     context.currentColumn = pinned
@@ -316,49 +470,64 @@ function addLinesToFlow(context: LayoutContext, options: TextOptions) {
 
   if (options.allowSplit === false) {
     const height = lines.length * lineHeight
+    // If a block already consumes a full page, drop the keep-with-next reserve so it can still render.
+    const effectiveReserve = getEffectiveReserve(height, reserveHeight, maxContentHeight)
     let guard = 0
     while (guard < 48) {
       const col = resolveColumn()
-      if (context.currentY[col] + height <= context.maxContentY) {
+      if (context.currentY[col] + height + effectiveReserve <= context.maxContentY) {
         break
       }
       advanceWhenFull()
       guard += 1
     }
 
-    const col = resolveColumn()
-    context.renderedPages[context.currentPageIndex].blocks.push({
-      id: `${options.idPrefix}-${context.currentPageIndex}-${col}`,
-      x: xFor(col),
-      y: context.currentY[col],
-      width,
-      lines,
-      fontSize,
-      lineHeight,
-      fontWeight,
-      fontStyle,
-      align,
-      uppercase: options.uppercase,
-      letterSpacing: options.letterSpacing,
-    })
-    context.currentY[col] += height + blockSpacing
-    return
+    if (height <= maxContentHeight) {
+      const col = resolveColumn()
+      context.renderedPages[context.currentPageIndex].blocks.push({
+        id: `${options.idPrefix}-${context.currentPageIndex}-${col}`,
+        x: xFor(col),
+        y: context.currentY[col],
+        width,
+        lines,
+        fontSize,
+        lineHeight,
+        fontWeight,
+        fontStyle,
+        align,
+        uppercase,
+        letterSpacing,
+      })
+      context.currentY[col] += height + blockSpacing
+      return
+    }
+
+    // Blocks that cannot fit on a single page fall through to the splitting logic below.
   }
 
   let remainingLines = [...lines]
   let blockIndex = 0
+  const minFragmentLines = Math.max(1, options.minFragmentLines ?? 1)
 
   while (remainingLines.length > 0) {
     const col = resolveColumn()
     const availableHeight = context.maxContentY - context.currentY[col]
     const availableLines = Math.floor(availableHeight / lineHeight)
+    const requiredLines = remainingLines.length <= minFragmentLines ? 1 : Math.min(minFragmentLines, remainingLines.length)
+    const keepReserve = blockIndex === 0
+      ? getEffectiveReserve(requiredLines * lineHeight, reserveHeight, maxContentHeight)
+      : 0
+    const lacksRequiredLines = availableLines < requiredLines
+    const violatesReservedSpace = context.currentY[col] + requiredLines * lineHeight + keepReserve > context.maxContentY
 
-    if (availableLines <= 0) {
+    if (lacksRequiredLines || violatesReservedSpace) {
       advanceWhenFull()
       continue
     }
 
-    const visibleLines = remainingLines.slice(0, availableLines)
+    const takeCount = Math.min(availableLines, remainingLines.length)
+    const visibleLines = remainingLines.slice(0, takeCount)
+    const isLastFragment = takeCount === remainingLines.length
 
     context.renderedPages[context.currentPageIndex].blocks.push({
       id: `${options.idPrefix}-${context.currentPageIndex}-${col}-${blockIndex}`,
@@ -371,11 +540,11 @@ function addLinesToFlow(context: LayoutContext, options: TextOptions) {
       fontWeight,
       fontStyle,
       align,
-      uppercase: options.uppercase,
-      letterSpacing: options.letterSpacing,
+      uppercase,
+      letterSpacing,
     })
 
-    context.currentY[col] += visibleLines.length * lineHeight + blockSpacing
+    context.currentY[col] += visibleLines.length * lineHeight + (isLastFragment ? blockSpacing : 0)
     remainingLines = remainingLines.slice(visibleLines.length)
     blockIndex += 1
 
@@ -389,6 +558,7 @@ type SectionHeadingOptions = {
   uppercase?: boolean
   /** Document-space px after heading (tighter for short officer blocks). */
   spacingAfter?: number
+  reserveHeight?: number
 }
 
 function addSectionHeading(
@@ -405,6 +575,7 @@ function addSectionHeading(
     spacingAfter: options?.spacingAfter ?? ITEM_GAP,
     allowSplit: false,
     uppercase: options?.uppercase === true,
+    reserveHeight: options?.reserveHeight,
   })
 }
 
@@ -458,19 +629,30 @@ function segmentCoreBodyForLayout(body: string): { text: string; indent: boolean
 
 function renderCoreSection(context: LayoutContext, section: CoreSection, index: number) {
   const trimmedTitle = section.title.trim()
+  const segments = segmentCoreBodyForLayout(section.body).filter((seg) => seg.text.trim())
+  const firstBodyReserve = segments.length
+    ? estimateTextHeight(
+        context,
+        {
+          idPrefix: `section-body-${index}-reserve`,
+          text: segments[0].text,
+          fontSize: context.settings.bodySize,
+          indent: segments[0].indent ? CORE_LIST_INDENT : undefined,
+        },
+        2,
+      )
+    : 0
+
   if (trimmedTitle) {
     const headingUppercase = !/^(Dean|College Secretary)$/i.test(trimmedTitle)
     const tightOfficerHeading = /^College Secretary$/i.test(trimmedTitle)
     addSectionHeading(context, section.title, index, {
       uppercase: headingUppercase,
       spacingAfter: tightOfficerHeading ? 1 : undefined,
+      reserveHeight: firstBodyReserve,
     })
   }
-  const segments = segmentCoreBodyForLayout(section.body)
   segments.forEach((seg, segIndex) => {
-    if (!seg.text.trim()) {
-      return
-    }
     const isLast = segIndex === segments.length - 1
     addLinesToFlow(context, {
       idPrefix: `section-body-${index}-${segIndex}`,
@@ -478,6 +660,7 @@ function renderCoreSection(context: LayoutContext, section: CoreSection, index: 
       fontSize: context.settings.bodySize,
       spacingAfter: isLast ? SECTION_GAP : PARAGRAPH_GAP,
       indent: seg.indent ? CORE_LIST_INDENT : undefined,
+      minFragmentLines: 2,
     })
   })
 }
@@ -513,6 +696,17 @@ function renderAcademicPage(context: LayoutContext, entries: AcademicEntry[]) {
       fontWeight: 'bold',
       spacingAfter: 8,
       allowSplit: false,
+      reserveHeight: estimateTextHeight(
+        context,
+        {
+          idPrefix: `academic-grade-${gradeIndex}-reserve`,
+          text: [...categories.keys()][0] ?? '',
+          fontSize: context.settings.headingSize,
+          fontWeight: 'bold',
+        },
+        1,
+        true,
+      ),
     })
 
     let categoryIndex = 0
@@ -524,6 +718,17 @@ function renderAcademicPage(context: LayoutContext, entries: AcademicEntry[]) {
         fontWeight: 'bold',
         spacingAfter: 8,
         allowSplit: false,
+        reserveHeight: estimateTextHeight(
+          context,
+          {
+            idPrefix: `academic-category-${gradeIndex}-${categoryIndex}-reserve`,
+            text: [...awards.keys()][0] ?? '',
+            fontSize: context.settings.bodySize,
+            fontWeight: 'bold',
+          },
+          1,
+          true,
+        ) + context.settings.bodySize * getScale(context.settings) * context.settings.lineHeight,
       })
 
       let awardIndex = 0
@@ -535,12 +740,15 @@ function renderAcademicPage(context: LayoutContext, entries: AcademicEntry[]) {
           fontWeight: 'bold',
           spacingAfter: ITEM_GAP,
           allowSplit: false,
+          reserveHeight: context.settings.bodySize * getScale(context.settings) * context.settings.lineHeight,
         })
         addLinesToFlow(context, {
           idPrefix: `academic-names-${gradeIndex}-${categoryIndex}-${awardIndex}`,
-          text: names.map((name) => `    ${name}`).join('\n'),
+          text: names.join('\n'),
           fontSize: context.settings.bodySize,
           spacingAfter: 10,
+          indent: AWARDEE_LIST_INDENT,
+          minFragmentLines: 2,
         })
         awardIndex += 1
       }
@@ -573,6 +781,18 @@ function renderNonAcademicPage(context: LayoutContext, entries: NonAcademicEntry
       fontWeight: 'bold',
       spacingAfter: 10,
       allowSplit: false,
+      reserveHeight:
+        estimateTextHeight(
+          context,
+          {
+            idPrefix: `nonacademic-name-${categoryIndex}-reserve`,
+            text: groupedEntries[0]?.name ?? '',
+            fontSize: context.settings.bodySize,
+            fontWeight: 'bold',
+          },
+          1,
+          true,
+        ) + context.settings.bodySize * getScale(context.settings) * context.settings.lineHeight,
     })
 
     groupedEntries.forEach((entry, entryIndex) => {
@@ -583,12 +803,14 @@ function renderNonAcademicPage(context: LayoutContext, entries: NonAcademicEntry
         fontWeight: 'bold',
         spacingAfter: ITEM_GAP,
         allowSplit: false,
+        reserveHeight: context.settings.bodySize * getScale(context.settings) * context.settings.lineHeight,
       })
       addLinesToFlow(context, {
         idPrefix: `nonacademic-award-${categoryIndex}-${entryIndex}`,
         text: entry.award,
         fontSize: context.settings.bodySize,
         spacingAfter: 12,
+        minFragmentLines: 2,
       })
     })
 
@@ -604,10 +826,64 @@ function renderProgramPage(context: LayoutContext, rows: ProgramRow[]) {
   const afterBodySpacing = context.settings.bodySize * context.settings.lineHeight
 
   rows.forEach((row, index) => {
-    const rowTop = Math.max(context.currentY[0], context.currentY[1])
+    const leftBodyReserve = estimateTextHeight(
+      context,
+      {
+        idPrefix: `program-left-body-${index}-reserve`,
+        text: row.leftBody,
+        fontSize: context.settings.bodySize,
+        pinColumn: 0,
+      },
+      2,
+    )
+    const rightBodyReserve = estimateTextHeight(
+      context,
+      {
+        idPrefix: `program-right-body-${index}-reserve`,
+        text: row.rightBody ?? '',
+        fontSize: context.settings.bodySize,
+        pinColumn: 1,
+      },
+      2,
+    )
+    const leftTitleReserve = estimateTextHeight(
+      context,
+      {
+        idPrefix: `program-left-title-${index}-reserve`,
+        text: row.leftTitle,
+        fontSize: context.settings.bodySize,
+        fontWeight: 'bold',
+        spacingAfter: 1,
+        pinColumn: 0,
+      },
+      1,
+      true,
+    )
+    const rightTitleReserve = estimateTextHeight(
+      context,
+      {
+        idPrefix: `program-right-title-${index}-reserve`,
+        text: row.rightTitle ?? '',
+        fontSize: context.settings.bodySize,
+        fontWeight: 'bold',
+        spacingAfter: 1,
+        pinColumn: 1,
+      },
+      1,
+      true,
+    )
+    let currentRowTop = Math.max(context.currentY[0], context.currentY[1])
+    const minimumRowHeight = Math.max(leftTitleReserve + leftBodyReserve, rightTitleReserve + rightBodyReserve)
+
+    // Only push the row to the next page when we are already mid-page; a fresh page should use all available space.
+    if (currentRowTop > context.contentTop && context.maxContentY - currentRowTop < minimumRowHeight) {
+      advanceToNextPage(context)
+      currentRowTop = context.contentTop
+    }
+
     const rowStartPageIndex = context.currentPageIndex
-    context.currentY[0] = rowTop
-    context.currentY[1] = rowTop
+    context.currentY[0] = currentRowTop
+    context.currentY[1] = currentRowTop
 
     addLinesToFlow(context, {
       idPrefix: `program-left-title-${index}`,
@@ -617,6 +893,7 @@ function renderProgramPage(context: LayoutContext, rows: ProgramRow[]) {
       spacingAfter: 1,
       allowSplit: false,
       pinColumn: 0,
+      reserveHeight: leftBodyReserve,
     })
     addLinesToFlow(context, {
       idPrefix: `program-left-body-${index}`,
@@ -624,10 +901,11 @@ function renderProgramPage(context: LayoutContext, rows: ProgramRow[]) {
       fontSize: context.settings.bodySize,
       spacingAfter: afterBodySpacing,
       pinColumn: 0,
+      minFragmentLines: 2,
     })
 
     const stillSameRowPage = context.currentPageIndex === rowStartPageIndex
-    context.currentY[1] = stillSameRowPage ? rowTop : context.currentY[1]
+    context.currentY[1] = stillSameRowPage ? currentRowTop : context.currentY[1]
 
     addLinesToFlow(context, {
       idPrefix: `program-right-title-${index}`,
@@ -637,6 +915,7 @@ function renderProgramPage(context: LayoutContext, rows: ProgramRow[]) {
       spacingAfter: 1,
       allowSplit: false,
       pinColumn: 1,
+      reserveHeight: rightBodyReserve,
     })
     addLinesToFlow(context, {
       idPrefix: `program-right-body-${index}`,
@@ -644,6 +923,7 @@ function renderProgramPage(context: LayoutContext, rows: ProgramRow[]) {
       fontSize: context.settings.bodySize,
       spacingAfter: afterBodySpacing,
       pinColumn: 1,
+      minFragmentLines: 2,
     })
     context.currentColumn = context.currentY[0] >= context.currentY[1] ? 0 : 1
   })

@@ -1,5 +1,6 @@
 import { Document, Font, Page, StyleSheet, Text } from '@react-pdf/renderer'
 
+import { getRenderedBlockLines } from '@/lib/layout'
 import { PAGE_HEIGHT, PAGE_WIDTH, type RenderedPage } from '@/types/cms'
 
 Font.registerHyphenationCallback((word) => [word])
@@ -33,10 +34,9 @@ export function PdfDocument({ pages }: { pages: RenderedPage[] }) {
                 fontFamily: block.fontWeight === 'bold' ? 'Times-Bold' : 'Times-Roman',
                 fontStyle: block.fontStyle,
                 letterSpacing: block.letterSpacing,
-                textTransform: block.uppercase ? 'uppercase' : 'none',
               }}
             >
-              {block.lines.join('\n')}
+              {getRenderedBlockLines(block).join('\n')}
             </Text>
           ))}
         </Page>

@@ -2,11 +2,17 @@ import { ChevronLeft, ChevronRight, Minus, Plus } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 
 import { Button } from '@/components/ui/button'
+import { getRenderedBlockLines } from '@/lib/layout'
 import { cn } from '@/lib/utils'
 import { PAGE_HEIGHT, PAGE_WIDTH, type RenderedPage } from '@/types/cms'
 
 const RULER_SIZE = 24
 const RULER_FONT = `7.5px 'JetBrains Mono', 'Fira Code', monospace`
+
+/** DOM height required to show all precomputed lines for a text block at the current zoom level. */
+function getBlockPreviewHeight(block: RenderedPage['blocks'][number], zoom: number) {
+  return block.lines.length * block.lineHeight * zoom
+}
 
 function HorizontalRuler({ zoom, panX, maxVal }: { zoom: number; panX: number; maxVal: number }) {
   const containerRef = useRef<HTMLDivElement>(null)
@@ -372,15 +378,13 @@ export function CanvasPreview({
               {currentPage.blocks.map((block) => (
                 <div
                   key={block.id}
-                  className={cn(
-                    'pointer-events-none absolute whitespace-pre-wrap break-words text-[var(--color-ink)]',
-                    block.uppercase && 'uppercase'
-                  )}
+                  className="pointer-events-none absolute whitespace-pre-wrap text-[var(--color-ink)]"
                   style={{
                     left: block.x * zoom,
                     top: block.y * zoom,
                     width: block.width * zoom,
                     maxWidth: block.width * zoom,
+                    height: getBlockPreviewHeight(block, zoom),
                     fontSize: block.fontSize * zoom,
                     lineHeight: `${block.lineHeight * zoom}px`,
                     fontWeight: block.fontWeight,
@@ -388,10 +392,10 @@ export function CanvasPreview({
                     letterSpacing: `${(block.letterSpacing ?? 0) * zoom}px`,
                     textAlign: block.align,
                     fontFamily: 'Georgia, "Times New Roman", serif',
-                    overflowWrap: 'anywhere',
+                    overflow: 'hidden',
                   }}
                 >
-                  {block.lines.join('\n')}
+                  {getRenderedBlockLines(block).join('\n')}
                 </div>
               ))}
             </div>
