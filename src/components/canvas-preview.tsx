@@ -2,6 +2,7 @@ import { ChevronLeft, ChevronRight, Minus, Plus } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 
 import { Button } from '@/components/ui/button'
+import { getFontStack } from '@/lib/fonts'
 import { getRenderedBlockLines } from '@/lib/layout'
 import { cn } from '@/lib/utils'
 import { PAGE_HEIGHT, PAGE_WIDTH, type RenderedPage } from '@/types/cms'
@@ -391,7 +392,7 @@ export function CanvasPreview({
                     fontStyle: block.fontStyle,
                     letterSpacing: `${(block.letterSpacing ?? 0) * zoom}px`,
                     textAlign: block.align,
-                    fontFamily: 'Georgia, "Times New Roman", serif',
+                    fontFamily: getFontStack(block.fontFamily),
                     overflow: 'hidden',
                   }}
                 >

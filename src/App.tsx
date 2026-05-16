@@ -20,13 +20,15 @@ import { PageList } from '@/components/page-list'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { ScrollArea } from '@/components/ui/scroll-area'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { FONT_OPTIONS } from '@/lib/fonts'
+import { exportPdfDocument, exportSvgDocument, warmPdfExportWorker } from '@/lib/exporters'
 import { renderDocument } from '@/lib/layout'
 import { defaultSettings, seedPages } from '@/lib/sample-data'
 import { deletePage, getPages, getSettings, savePage, saveSettings } from '@/lib/storage'
-import { exportPdfDocument, exportSvgDocument, warmPdfExportWorker } from '@/lib/exporters'
 import { progressPercent, type PdfExportProgress } from '@/lib/pdf-worker-protocol'
-import type { CmsPage, CmsSettings, PageType } from '@/types/cms'
+import type { CmsPage, CmsSettings, FontPreset, PageType } from '@/types/cms'
 
 const PAGE_LABELS: Record<PageType, string> = {
   core: 'Core Page',
@@ -228,10 +230,7 @@ function App() {
   )
 
   const renderedPages = useMemo(() => renderDocument(pages, settings), [pages, settings])
-
-  useEffect(() => {
-    setPreviewPageIndex((i) => (renderedPages.length === 0 ? 0 : Math.min(i, renderedPages.length - 1)))
-  }, [renderedPages.length])
+  const safePreviewPageIndex = Math.min(previewPageIndex, Math.max(0, renderedPages.length - 1))
 
   useEffect(() => {
     warmPdfExportWorker()
@@ -307,9 +306,7 @@ function App() {
   }
 
   const handleExportSvg = () => {
-    const maxIdx = Math.max(0, renderedPages.length - 1)
-    const idx = Math.min(Math.max(0, previewPageIndex), maxIdx)
-    const page = renderedPages[idx]
+    const page = renderedPages[safePreviewPageIndex]
     if (!page) {
       return
     }
@@ -443,6 +440,44 @@ function App() {
                 unit="px"
                 onChange={(v) => updateSetting('bodySize', v)}
               />
+              <div className="grid gap-3 md:grid-cols-2">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-[var(--color-body)]">Heading font</label>
+                  <Select value={settings.headingFont} onValueChange={(value) => updateSetting('headingFont', value as FontPreset)}>
+                    <SelectTrigger className="h-10 text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {FONT_OPTIONS.map((font) => (
+                        <SelectItem key={font.value} value={font.value}>
+                          {font.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-[11px] leading-snug text-[var(--color-muted)]">
+                    {FONT_OPTIONS.find((font) => font.value === settings.headingFont)?.description}
+                  </p>
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-[var(--color-body)]">Body font</label>
+                  <Select value={settings.bodyFont} onValueChange={(value) => updateSetting('bodyFont', value as FontPreset)}>
+                    <SelectTrigger className="h-10 text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {FONT_OPTIONS.map((font) => (
+                        <SelectItem key={font.value} value={font.value}>
+                          {font.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-[11px] leading-snug text-[var(--color-muted)]">
+                    {FONT_OPTIONS.find((font) => font.value === settings.bodyFont)?.description}
+                  </p>
+                </div>
+              </div>
               <SliderSetting
                 label="Meta size"
                 value={settings.metaSize}
@@ -662,11 +697,11 @@ function App() {
 
           {/* Canvas */}
           <div className="min-w-0 flex-1">
-            <CanvasPreview
-              renderedPages={renderedPages}
-              previewPageIndex={previewPageIndex}
-              onPreviewPageChange={setPreviewPageIndex}
-            />
+              <CanvasPreview
+                renderedPages={renderedPages}
+                previewPageIndex={safePreviewPageIndex}
+                onPreviewPageChange={setPreviewPageIndex}
+              />
           </div>
 
           {/* Resize handle */}
@@ -697,11 +732,11 @@ function App() {
             />
           </div>
           <div className={mobileTab === 'canvas' ? 'block h-full' : 'hidden'}>
-            <CanvasPreview
-              renderedPages={renderedPages}
-              previewPageIndex={previewPageIndex}
-              onPreviewPageChange={setPreviewPageIndex}
-            />
+              <CanvasPreview
+                renderedPages={renderedPages}
+                previewPageIndex={safePreviewPageIndex}
+                onPreviewPageChange={setPreviewPageIndex}
+              />
           </div>
           <div className={mobileTab === 'editor' ? 'block h-full' : 'hidden'}>
             {EditorSettingsPanel}

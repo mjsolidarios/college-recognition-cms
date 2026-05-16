@@ -1,4 +1,5 @@
 import { getRenderedBlockLines } from '@/lib/rendered-block-text'
+import { getFontStack } from '@/lib/fonts'
 import { type PdfExportProgress } from '@/lib/pdf-worker-protocol'
 import { downloadFile, slugify } from '@/lib/utils'
 import { PAGE_HEIGHT, PAGE_WIDTH, type RenderedPage } from '@/types/cms'
@@ -20,7 +21,7 @@ function renderSvgBlock(block: RenderedPage['blocks'][number]) {
   const x = block.align === 'center' ? block.x + block.width / 2 : block.align === 'right' ? block.x + block.width : block.x
   const lines = getRenderedBlockLines(block)
 
-  return `<text x="${x}" y="${blockY}" font-family="Georgia, Times New Roman, serif" font-size="${block.fontSize}" font-weight="${block.fontWeight}" font-style="${block.fontStyle}" letter-spacing="${block.letterSpacing ?? 0}" text-anchor="${textAnchor}">${lines
+  return `<text x="${x}" y="${blockY}" font-family="${escapeXml(getFontStack(block.fontFamily))}" font-size="${block.fontSize}" font-weight="${block.fontWeight}" font-style="${block.fontStyle}" letter-spacing="${block.letterSpacing ?? 0}" text-anchor="${textAnchor}">${lines
     .map((line, index) => `<tspan x="${x}" dy="${index === 0 ? 0 : block.lineHeight}">${escapeXml(line || ' ')}</tspan>`)
     .join('')}</text>`
 }
