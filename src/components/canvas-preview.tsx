@@ -439,7 +439,7 @@ export function CanvasPreview({
       <div className="z-10 flex items-center justify-between gap-3 rounded-b-xl border-t border-[var(--color-hairline)] bg-[var(--surface-canvas)] px-4 py-2.5">
         <div className="text-xs font-medium text-[var(--color-muted)]">
           {currentSlot?.kind === 'cover'
-            ? currentSlot.label
+            ? `${currentSlot.label} (${safeIdx + 1} of ${totalSlots})`
             : `Page ${totalSlots > 0 ? safeIdx + 1 : 0} of ${totalSlots}`}
         </div>
         <div className="flex items-center gap-1">

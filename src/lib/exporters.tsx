@@ -69,9 +69,10 @@ export function exportSvgDocument(pages: RenderedPage[], title: string, frontCov
 
   const totalHeight = slots.length * PAGE_HEIGHT + Math.max(0, slots.length - 1) * spacing
 
-  const renderCoverSlot = (dataUrl: string, pageOffset: number) =>
+  const renderCoverSlot = (dataUrl: string, pageOffset: number, label: string) =>
     [
       `<g transform="translate(0 ${pageOffset})">`,
+      `<title>${escapeXml(label)}</title>`,
       `<rect width="${PAGE_WIDTH}" height="${PAGE_HEIGHT}" fill="#ffffff"/>`,
       `<image href="${dataUrl}" x="0" y="0" width="${PAGE_WIDTH}" height="${PAGE_HEIGHT}" preserveAspectRatio="xMidYMid meet"/>`,
       `</g>`,
@@ -87,8 +88,11 @@ export function exportSvgDocument(pages: RenderedPage[], title: string, frontCov
 
   const renderSlot = (slot: SvgSlot, index: number) => {
     const pageOffset = index * (PAGE_HEIGHT + spacing)
+    const label = slot.kind === 'cover'
+      ? (frontCover && slot.dataUrl === frontCover ? 'Front Cover' : 'Back Cover')
+      : `Page ${slot.page.pageNumber}`
     return slot.kind === 'cover'
-      ? renderCoverSlot(slot.dataUrl, pageOffset)
+      ? renderCoverSlot(slot.dataUrl, pageOffset, label)
       : renderPageSlot(slot.page, pageOffset)
   }
 
