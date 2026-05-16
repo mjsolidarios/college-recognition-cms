@@ -24,6 +24,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { FONT_OPTIONS } from '@/lib/fonts'
 import { exportPdfDocument, exportSvgDocument, warmPdfExportWorker } from '@/lib/exporters'
+import { snapFlowPosition } from '@/lib/flow-position'
 import { renderDocument } from '@/lib/layout'
 import { defaultSettings, seedPages } from '@/lib/sample-data'
 import { deletePage, getPages, getSettings, savePage, saveSettings, getFrontCover, saveFrontCover, getBackCover, saveBackCover } from '@/lib/storage'
@@ -257,7 +258,7 @@ function App() {
   }
 
   const handleCoreSectionReposition = (pageId: string, sectionId: string, flowPosition: number) => {
-    const snapped = Math.max(0, Math.round(flowPosition))
+    const snapped = snapFlowPosition(flowPosition)
     const nextPages = pages.map((page) => {
       if (page.id !== pageId || page.type !== 'core') {
         return page

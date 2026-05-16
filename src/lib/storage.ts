@@ -1,4 +1,5 @@
 import { defaultSettings, seedPages } from '@/lib/sample-data'
+import { isValidFlowPosition, normalizeFlowPosition } from '@/lib/flow-position'
 import type { CmsPage, CmsSettings, CorePage } from '@/types/cms'
 
 const PAGES_KEY = 'cms_v1_pages'
@@ -161,6 +162,11 @@ function migrateStripTrailingDeanFromTitleSection(pages: CmsPage[]): { pages: Cm
 
 function migrateCoreSectionFlowPosition(pages: CmsPage[]): { pages: CmsPage[]; changed: boolean } {
   let changed = false
+  const stripFlowPosition = (section: { id: string; title: string; body: string }) => ({
+    id: section.id,
+    title: section.title,
+    body: section.body,
+  })
   const next = pages.map((page) => {
     if (page.type !== 'core') {
       return page
@@ -170,8 +176,12 @@ function migrateCoreSectionFlowPosition(pages: CmsPage[]): { pages: CmsPage[]; c
       if (section.flowPosition === undefined) {
         return section
       }
-      if (typeof section.flowPosition === 'number' && Number.isFinite(section.flowPosition) && section.flowPosition >= 0) {
-        const rounded = Math.round(section.flowPosition)
+      if (isValidFlowPosition(section.flowPosition)) {
+        const rounded = normalizeFlowPosition(section.flowPosition)
+        if (rounded === undefined) {
+          sectionChanged = true
+          return stripFlowPosition(section)
+        }
         if (rounded === section.flowPosition) {
           return section
         }
@@ -179,7 +189,7 @@ function migrateCoreSectionFlowPosition(pages: CmsPage[]): { pages: CmsPage[]; c
         return { ...section, flowPosition: rounded }
       }
       sectionChanged = true
-      return { id: section.id, title: section.title, body: section.body }
+      return stripFlowPosition(section)
     })
     if (!sectionChanged) {
       return page

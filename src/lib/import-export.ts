@@ -1,5 +1,6 @@
 import type { CmsPage, CmsSettings, AcademicEntry, NonAcademicEntry, ProgramRow, CoreSection } from '@/types/cms'
 import { defaultSettings } from '@/lib/sample-data'
+import { isValidFlowPosition, normalizeFlowPosition } from '@/lib/flow-position'
 
 /* ── Export schema ────────────────────────────────────────── */
 
@@ -122,7 +123,7 @@ function validatePageContent(page: Record<string, unknown>, index: number): stri
           errors.push(`Page ${index}, section ${i}: requires "title" and "body" strings`)
         } else if (
           section.flowPosition !== undefined &&
-          (typeof section.flowPosition !== 'number' || !Number.isFinite(section.flowPosition) || section.flowPosition < 0)
+          !isValidFlowPosition(section.flowPosition)
         ) {
           errors.push(`Page ${index}, section ${i}: "flowPosition" must be a non-negative number when provided`)
         }
@@ -207,10 +208,7 @@ export function validateBookletImport(raw: unknown): ValidationResult {
     const sections = ((page as { content: { sections: CoreSection[] } }).content.sections).map((section) => ({
       ...section,
       id: section.id || crypto.randomUUID(),
-      flowPosition:
-        typeof section.flowPosition === 'number' && Number.isFinite(section.flowPosition) && section.flowPosition >= 0
-          ? Math.round(section.flowPosition)
-          : undefined,
+      flowPosition: normalizeFlowPosition(section.flowPosition),
     }))
     return { ...page, id, order: i, content: { ...page.content, sections } } as CmsPage
   })

@@ -3,12 +3,14 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 
 import { Button } from '@/components/ui/button'
 import { getFontStack } from '@/lib/fonts'
+import { FLOW_POSITION_SNAP_INCREMENT, snapFlowPosition } from '@/lib/flow-position'
 import { getRenderedBlockLines } from '@/lib/layout'
 import { cn } from '@/lib/utils'
 import { PAGE_HEIGHT, PAGE_WIDTH, type RenderedPage } from '@/types/cms'
 
 const RULER_SIZE = 24
 const RULER_FONT = `7.5px 'JetBrains Mono', 'Fira Code', monospace`
+const PAGE_CENTER_X = PAGE_WIDTH / 2
 
 /** DOM height required to show all precomputed lines for a text block at the current zoom level. */
 function getBlockPreviewHeight(block: RenderedPage['blocks'][number], zoom: number) {
@@ -40,6 +42,14 @@ function placementFromFlow(flowPosition: number, contentTop: number, maxContentY
   const column = (withinPage >= columnHeight ? 1 : 0) as 0 | 1
   const y = contentTop + withinPage - (column === 1 ? columnHeight : 0)
   return { localPageIndex, column, y }
+}
+
+function isSectionActive(
+  sectionDrag: { pageId: string; sectionId: string } | null,
+  sectionId: string,
+  pageId: string,
+) {
+  return sectionDrag?.sectionId === sectionId && sectionDrag.pageId === pageId
 }
 
 function HorizontalRuler({ zoom, panX, maxVal }: { zoom: number; panX: number; maxVal: number }) {
@@ -251,7 +261,9 @@ export function CanvasPreview({
       const top = Math.min(...blocks.map((b) => b.y))
       const right = Math.max(...blocks.map((b) => b.x + b.width))
       const bottom = Math.max(...blocks.map((b) => b.y + b.lines.length * b.lineHeight))
-      const column = ((left + right) / 2 >= PAGE_WIDTH / 2 ? 1 : 0) as 0 | 1
+      // Core sections are anchored to one active column at a time in flow layout; if a section bbox midpoint is past page centerline,
+      // we anchor it to column 1 (right), otherwise column 0 (left).
+      const column = ((left + right) / 2 >= PAGE_CENTER_X ? 1 : 0) as 0 | 1
       const flowPosition = flowFromPlacement(
         currentSlot.page.sourcePageLocalIndex,
         column,
@@ -394,8 +406,9 @@ export function CanvasPreview({
       }
       e.preventDefault()
       e.stopPropagation()
+      // Convert pointer movement from screen px back to document-space px, so drag behavior stays correct at any zoom.
       const deltaY = (e.clientY - prev.startClientY) / zoom
-      const snapped = Math.round((prev.startFlow + deltaY) / 4) * 4
+      const snapped = snapFlowPosition(prev.startFlow + deltaY, FLOW_POSITION_SNAP_INCREMENT)
       return { ...prev, flow: Math.max(0, snapped) }
     })
   }
@@ -562,8 +575,8 @@ export function CanvasPreview({
               ))}
               {currentSlot.page.sourcePageType === 'core' &&
                 coreSectionOverlays.map((overlay) => {
-                  const isActive = sectionDrag?.sectionId === overlay.sectionId && sectionDrag.pageId === currentSlot.page.sourcePageId
-                  const translateY = isActive ? (sectionDrag.flow - sectionDrag.startFlow) * zoom : 0
+                  const isActive = isSectionActive(sectionDrag, overlay.sectionId, currentSlot.page.sourcePageId)
+                  const translateY = isActive && sectionDrag ? (sectionDrag.flow - sectionDrag.startFlow) * zoom : 0
                   return (
                     <button
                       key={`drag-${overlay.sectionId}`}

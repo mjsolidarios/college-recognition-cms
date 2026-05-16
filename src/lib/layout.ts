@@ -11,6 +11,7 @@ import type {
 } from '@/types/cms'
 import { PAGE_HEIGHT, PAGE_WIDTH } from '@/types/cms'
 import { getFontStack } from '@/lib/fonts'
+import { isValidFlowPosition } from '@/lib/flow-position'
 
 /** Space between title block and first body column (tighter to match print brochure). */
 const TITLE_GAP = 16
@@ -602,7 +603,6 @@ function setContextToFlowPosition(context: LayoutContext, flowPosition: number) 
     advanceToNextPage(context)
   }
 
-  context.currentPageIndex = pageOffset
   context.currentColumn = column
   context.currentY[column] = context.contentTop + yInColumn
 }
@@ -879,6 +879,19 @@ function renderNonAcademicPage(context: LayoutContext, entries: NonAcademicEntry
   }
 }
 
+function compareSectionsByFlowPosition(
+  left: { section: CoreSection; index: number },
+  right: { section: CoreSection; index: number },
+) {
+  const leftFlow = isValidFlowPosition(left.section.flowPosition) ? left.section.flowPosition : undefined
+  const rightFlow = isValidFlowPosition(right.section.flowPosition) ? right.section.flowPosition : undefined
+  if (leftFlow === undefined && rightFlow === undefined) return left.index - right.index
+  if (leftFlow === undefined) return 1
+  if (rightFlow === undefined) return -1
+  if (leftFlow === rightFlow) return left.index - right.index
+  return leftFlow - rightFlow
+}
+
 function renderProgramPage(context: LayoutContext, rows: ProgramRow[]) {
   /**
    * Trailing gutter after each cell (~one body line: scales with typography).
@@ -1034,16 +1047,9 @@ export function renderDocument(pages: CmsPage[], settings: CmsSettings) {
       case 'core':
         page.content.sections
           .map((section, index) => ({ section, index }))
-          .sort((left, right) => {
-            const leftFlow = left.section.flowPosition
-            const rightFlow = right.section.flowPosition
-            if (leftFlow === undefined && rightFlow === undefined) return left.index - right.index
-            if (leftFlow === undefined) return 1
-            if (rightFlow === undefined) return -1
-            return leftFlow - rightFlow
-          })
+          .sort(compareSectionsByFlowPosition)
           .forEach(({ section, index }) => {
-            if (typeof section.flowPosition === 'number' && Number.isFinite(section.flowPosition)) {
+            if (isValidFlowPosition(section.flowPosition)) {
               setContextToFlowPosition(context, section.flowPosition)
             }
             renderCoreSection(context, section, `${section.id}-${index}`)
