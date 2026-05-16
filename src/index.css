@@ -2,20 +2,23 @@
 
 /* ── Design tokens ───────────────────────────────────────── */
 :root {
-  /* Indigo primary palette */
-  --color-primary-50: 238 242 255;
-  --color-primary-100: 224 231 255;
-  --color-primary-200: 199 210 254;
-  --color-primary-400: 129 140 248;
-  --color-primary-500: 99 102 241;
-  --color-primary-600: 79 70 229;
-  --color-primary-700: 67 56 202;
+  /* Brand + text */
+  --color-primary: #f54e00;
+  --color-primary-active: #d04200;
+  --color-ink: #26251e;
+  --color-body: #5a5852;
+  --color-muted: #807d72;
+  --color-muted-soft: #a09c92;
 
-  /* Semantic surfaces */
-  --surface-page: #ffffff;
-  --surface-canvas: #f1f0ee;
-  --surface-app: #f7f7f5;
+  /* Hairlines + surfaces */
+  --color-hairline: #e6e5e0;
+  --color-hairline-soft: #efeee8;
+  --color-hairline-strong: #cfcdc4;
+  --surface-page: #f7f7f4;
+  --surface-canvas: #fafaf7;
+  --surface-app: #f7f7f4;
   --surface-raised: #ffffff;
+  --surface-strong: #e6e5e0;
 
   /* Type color tokens */
   --type-core: 99 102 241;       /* indigo */
@@ -23,7 +26,7 @@
   --type-academic: 5 150 105;    /* emerald */
   --type-non-academic: 225 29 72; /* rose */
 
-  color: #1c1917;
+  color: var(--color-ink);
   background-color: var(--surface-app);
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
   font-synthesis: none;
@@ -68,13 +71,13 @@ input[type="range"] {
   width: 100%;
   height: 6px;
   border-radius: 999px;
-  background: linear-gradient(to right, rgb(var(--color-primary-200)), rgb(var(--color-primary-100)));
+  background: linear-gradient(to right, #f6b79a, #f8d8c8);
   outline: none;
   transition: background 200ms ease;
 }
 
 input[type="range"]:hover {
-  background: linear-gradient(to right, rgb(var(--color-primary-400)), rgb(var(--color-primary-200)));
+  background: linear-gradient(to right, #f19669, #f6b79a);
 }
 
 input[type="range"]::-webkit-slider-thumb {
@@ -83,32 +86,32 @@ input[type="range"]::-webkit-slider-thumb {
   width: 18px;
   height: 18px;
   border-radius: 50%;
-  background: rgb(var(--color-primary-500));
+  background: var(--color-primary);
   border: 3px solid white;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.18), 0 0 0 0px rgb(var(--color-primary-400) / 0);
+  box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-primary) 20%, transparent);
   cursor: pointer;
   transition: box-shadow 200ms ease, transform 150ms ease;
 }
 
 input[type="range"]::-webkit-slider-thumb:hover {
   transform: scale(1.15);
-  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.22), 0 0 0 4px rgb(var(--color-primary-400) / 0.15);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--color-primary) 18%, transparent);
 }
 
 input[type="range"]::-moz-range-thumb {
   width: 18px;
   height: 18px;
   border-radius: 50%;
-  background: rgb(var(--color-primary-500));
+  background: var(--color-primary);
   border: 3px solid white;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.18);
+  box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-primary) 20%, transparent);
   cursor: pointer;
   transition: box-shadow 200ms ease, transform 150ms ease;
 }
 
 input[type="range"]::-moz-range-thumb:hover {
   transform: scale(1.15);
-  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.22), 0 0 0 4px rgb(var(--color-primary-400) / 0.15);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--color-primary) 18%, transparent);
 }
 
 /* ── Keyframe animations ─────────────────────────────────── */
@@ -171,7 +174,7 @@ input[type="range"]::-moz-range-thumb:hover {
   width: 100%;
   height: 100%;
   border-radius: 999px;
-  background: #d6d3d1;
+  background: var(--color-hairline-strong);
   transition: background 200ms ease;
   position: relative;
 }
@@ -190,7 +193,7 @@ input[type="range"]::-moz-range-thumb:hover {
 }
 
 .toggle-switch input:checked + .toggle-track {
-  background: rgb(var(--color-primary-500));
+  background: var(--color-primary);
 }
 
 .toggle-switch input:checked + .toggle-track::after {
@@ -198,7 +201,7 @@ input[type="range"]::-moz-range-thumb:hover {
 }
 
 .toggle-switch input:focus-visible + .toggle-track {
-  outline: 2px solid rgb(var(--color-primary-400));
+  outline: 2px solid color-mix(in srgb, var(--color-primary) 65%, white);
   outline-offset: 2px;
 }
 
@@ -213,10 +216,10 @@ input[type="range"]::-moz-range-thumb:hover {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #c8c5be;
+  background: var(--color-hairline-strong);
   border-radius: 999px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #a8a29e;
+  background: var(--color-muted-soft);
 }

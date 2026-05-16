@@ -6,10 +6,10 @@ import { cn } from '@/lib/utils'
 import type { CmsPage, PageType } from '@/types/cms'
 
 const PAGE_TYPE_CONFIG: Record<PageType, { label: string; color: string; bgColor: string; borderColor: string; icon: typeof FileText }> = {
-  core: { label: 'Core', color: 'text-indigo-700', bgColor: 'bg-indigo-50', borderColor: 'border-indigo-200', icon: FileText },
-  program: { label: 'Program', color: 'text-amber-700', bgColor: 'bg-amber-50', borderColor: 'border-amber-200', icon: LayoutList },
-  academic: { label: 'Academic', color: 'text-emerald-700', bgColor: 'bg-emerald-50', borderColor: 'border-emerald-200', icon: Medal },
-  'non-academic': { label: 'Non-Academic', color: 'text-rose-700', bgColor: 'bg-rose-50', borderColor: 'border-rose-200', icon: Star },
+  core: { label: 'Core', color: 'text-[rgb(var(--type-core))]', bgColor: 'bg-[rgb(var(--type-core)/0.12)]', borderColor: 'border-[rgb(var(--type-core)/0.35)]', icon: FileText },
+  program: { label: 'Program', color: 'text-[rgb(var(--type-program))]', bgColor: 'bg-[rgb(var(--type-program)/0.12)]', borderColor: 'border-[rgb(var(--type-program)/0.35)]', icon: LayoutList },
+  academic: { label: 'Academic', color: 'text-[rgb(var(--type-academic))]', bgColor: 'bg-[rgb(var(--type-academic)/0.12)]', borderColor: 'border-[rgb(var(--type-academic)/0.35)]', icon: Medal },
+  'non-academic': { label: 'Non-Academic', color: 'text-[rgb(var(--type-non-academic))]', bgColor: 'bg-[rgb(var(--type-non-academic)/0.12)]', borderColor: 'border-[rgb(var(--type-non-academic)/0.35)]', icon: Star },
 }
 
 function TypeBadge({ type }: { type: PageType }) {
@@ -53,16 +53,16 @@ function SortablePageItem({
       style={style}
       onClick={() => onSelect(page.id)}
       className={cn(
-        'group flex w-full items-start gap-2.5 rounded-lg border px-3 py-2.5 text-left transition-all duration-200',
+        'group flex w-full items-start gap-2.5 rounded-lg border px-3 py-2.5 text-left transition-colors duration-200',
         isActive
-          ? `border-l-[3px] ${config.borderColor} bg-white shadow-sm`
-          : 'border-transparent bg-transparent hover:bg-stone-50',
-        isOver && 'ring-2 ring-indigo-400/30',
-        isDragging && 'opacity-60 shadow-lg scale-[1.02]',
+          ? `border-l-[3px] ${config.borderColor} bg-white`
+          : 'border-transparent bg-transparent hover:bg-[var(--surface-canvas)]',
+        isOver && 'ring-2 ring-[color:color-mix(in_srgb,var(--color-primary)_18%,transparent)]',
+        isDragging && 'opacity-60 scale-[1.02]',
       )}
     >
       <span
-        className={cn('mt-0.5 inline-flex cursor-grab text-stone-300 transition-colors hover:text-stone-500', isActive && 'text-stone-400')}
+        className={cn('mt-0.5 inline-flex cursor-grab text-[var(--color-muted-soft)] transition-colors hover:text-[var(--color-muted)]', isActive && 'text-[var(--color-muted)]')}
         {...listeners}
         {...attributes}
         onClick={(event) => event.stopPropagation()}
@@ -71,10 +71,10 @@ function SortablePageItem({
       </span>
       <span className="min-w-0 flex-1 space-y-1">
         <span className="flex items-center gap-2">
-          <span className={cn('text-xs font-medium text-stone-400 tabular-nums', isActive && 'text-stone-500')}>
+          <span className={cn('text-xs font-medium tabular-nums text-[var(--color-muted-soft)]', isActive && 'text-[var(--color-muted)]')}>
             {String(index + 1).padStart(2, '0')}
           </span>
-          <span className={cn('block truncate text-sm font-semibold', isActive ? 'text-stone-900' : 'text-stone-700')}>{page.title}</span>
+          <span className={cn('block truncate text-sm font-semibold', isActive ? 'text-[var(--color-ink)]' : 'text-[var(--color-body)]')}>{page.title}</span>
         </span>
         <TypeBadge type={page.type} />
       </span>
@@ -83,7 +83,7 @@ function SortablePageItem({
           type="button"
           size="icon"
           variant="ghost"
-          className="size-7 text-stone-400 hover:text-red-500"
+          className="size-7 text-[var(--color-muted)] hover:text-[#cf2d56]"
           onClick={(event) => {
             event.stopPropagation()
             onDelete(page.id)
@@ -122,15 +122,15 @@ export function PageList({
   }
 
   return (
-    <div className="flex h-full flex-col rounded-xl border border-stone-200/80 bg-white shadow-sm">
-      <div className="flex items-center justify-between border-b border-stone-100 px-4 py-3">
+    <div className="flex h-full flex-col rounded-xl border border-[var(--color-hairline)] bg-white">
+      <div className="flex items-center justify-between border-b border-[var(--color-hairline-soft)] px-4 py-3">
         <div>
-          <h2 className="text-sm font-semibold text-stone-900">Pages</h2>
-          <p className="text-xs text-stone-400">{pages.length} page{pages.length !== 1 ? 's' : ''} · drag to reorder</p>
+          <h2 className="text-sm font-semibold text-[var(--color-ink)]">Pages</h2>
+          <p className="text-xs text-[var(--color-muted)]">{pages.length} page{pages.length !== 1 ? 's' : ''} · drag to reorder</p>
         </div>
       </div>
 
-      <div className="border-b border-stone-100 px-3 py-2.5">
+      <div className="border-b border-[var(--color-hairline-soft)] px-3 py-2.5">
         <div className="grid grid-cols-2 gap-1.5">
           {(['core', 'program', 'academic', 'non-academic'] as PageType[]).map((pageType) => {
             const config = PAGE_TYPE_CONFIG[pageType]
@@ -141,9 +141,9 @@ export function PageList({
                 type="button"
                 onClick={() => onAdd(pageType)}
                 className={cn(
-                  'flex items-center gap-1.5 rounded-md border border-dashed px-2.5 py-1.5 text-xs font-medium transition-all duration-200 hover:border-solid cursor-pointer',
+                  'flex items-center gap-1.5 rounded-md border border-dashed px-2.5 py-1.5 text-xs font-medium transition-colors duration-200 hover:border-solid cursor-pointer',
                   config.borderColor, config.color,
-                  'hover:shadow-sm',
+                  'hover:bg-[var(--surface-canvas)]',
                 )}
               >
                 <Icon className="size-3.5" />

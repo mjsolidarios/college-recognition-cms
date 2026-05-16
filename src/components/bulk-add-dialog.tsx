@@ -12,7 +12,7 @@ function parseNames(raw: string): string[] {
 }
 
 function SectionLabel({ children }: { children: string }) {
-  return <label className="text-[11px] font-semibold uppercase tracking-[0.14em] text-stone-400">{children}</label>
+  return <label className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--color-muted)]">{children}</label>
 }
 
 function Shell({ open, onOpenChange, trigger, title, desc, children }: {
@@ -23,15 +23,15 @@ function Shell({ open, onOpenChange, trigger, title, desc, children }: {
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Trigger asChild>{trigger}</Dialog.Trigger>
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm animate-fade-in" />
-        <Dialog.Content className="fixed left-1/2 top-1/2 z-50 w-[95vw] max-w-lg -translate-x-1/2 -translate-y-1/2 rounded-xl border border-stone-200 bg-white p-5 shadow-xl animate-scale-in">
+        <Dialog.Overlay className="fixed inset-0 z-50 bg-black/30 animate-fade-in" />
+        <Dialog.Content className="fixed left-1/2 top-1/2 z-50 w-[95vw] max-w-lg -translate-x-1/2 -translate-y-1/2 rounded-xl border border-[var(--color-hairline)] bg-white p-5 animate-scale-in">
           <div className="flex items-start justify-between gap-3 mb-4">
             <div>
-              <Dialog.Title className="text-sm font-semibold text-stone-900">{title}</Dialog.Title>
-              <Dialog.Description className="mt-0.5 text-xs text-stone-500">{desc}</Dialog.Description>
+              <Dialog.Title className="text-sm font-semibold text-[var(--color-ink)]">{title}</Dialog.Title>
+              <Dialog.Description className="mt-0.5 text-xs text-[var(--color-muted)]">{desc}</Dialog.Description>
             </div>
             <Dialog.Close asChild>
-              <Button type="button" variant="ghost" size="icon" className="size-7 text-stone-400 flex-shrink-0">
+              <Button type="button" variant="ghost" size="icon" className="size-7 flex-shrink-0 text-[var(--color-muted)]">
                 <X className="size-4" />
               </Button>
             </Dialog.Close>
@@ -61,7 +61,7 @@ export function BulkAddAcademicDialog({ onAdd }: { onAdd: (e: AcademicEntry[]) =
   return (
     <Shell open={open} onOpenChange={setOpen} title="Bulk Add Academic Awardees" desc="Set shared fields, then paste names (one per line)."
       trigger={
-        <button type="button" className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-emerald-300 px-3 py-2.5 text-xs font-medium text-emerald-600 transition-all duration-200 hover:border-solid hover:bg-emerald-50/50 cursor-pointer">
+        <button type="button" className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-[rgb(var(--type-academic)/0.45)] px-3 py-2.5 text-xs font-medium text-[rgb(var(--type-academic))] transition-colors duration-200 hover:border-solid hover:bg-[rgb(var(--type-academic)/0.12)] cursor-pointer">
           <ListPlus className="size-3.5" />Bulk add names
         </button>
       }
@@ -75,13 +75,13 @@ export function BulkAddAcademicDialog({ onAdd }: { onAdd: (e: AcademicEntry[]) =
         <div className="space-y-1.5">
           <div className="flex items-center justify-between">
             <SectionLabel>Names (one per line)</SectionLabel>
-            {count > 0 && <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">{count} name{count !== 1 ? 's' : ''}</span>}
+            {count > 0 && <span className="rounded-full bg-[rgb(var(--type-academic)/0.12)] px-2 py-0.5 text-[10px] font-semibold text-[rgb(var(--type-academic))]">{count} name{count !== 1 ? 's' : ''}</span>}
           </div>
           <Textarea value={namesRaw} onChange={(e) => setNamesRaw(e.target.value)} placeholder={'Von Ashley P. Chichirita\nJames Joseph L. Cuadra\nLyka L. Lamigo'} className="min-h-36 font-mono text-xs" />
         </div>
         <div className="flex justify-end gap-2 pt-1">
           <Dialog.Close asChild><Button type="button" variant="outline" size="sm">Cancel</Button></Dialog.Close>
-          <Button type="button" size="sm" disabled={!count} onClick={submit} className="bg-emerald-600 text-white hover:bg-emerald-500"><ListPlus className="size-3.5" />Add {count} awardee{count !== 1 ? 's' : ''}</Button>
+          <Button type="button" size="sm" disabled={!count} onClick={submit} className="border-[#1f8a65] bg-[#1f8a65] text-white hover:border-[#1a7456] hover:bg-[#1a7456]"><ListPlus className="size-3.5" />Add {count} awardee{count !== 1 ? 's' : ''}</Button>
         </div>
       </div>
     </Shell>
@@ -105,7 +105,7 @@ export function BulkAddNonAcademicDialog({ onAdd }: { onAdd: (e: NonAcademicEntr
   return (
     <Shell open={open} onOpenChange={setOpen} title="Bulk Add Non-Academic Awards" desc="Set shared fields, then paste names (one per line)."
       trigger={
-        <button type="button" className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-rose-300 px-3 py-2.5 text-xs font-medium text-rose-600 transition-all duration-200 hover:border-solid hover:bg-rose-50/50 cursor-pointer">
+        <button type="button" className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-[rgb(var(--type-non-academic)/0.45)] px-3 py-2.5 text-xs font-medium text-[rgb(var(--type-non-academic))] transition-colors duration-200 hover:border-solid hover:bg-[rgb(var(--type-non-academic)/0.12)] cursor-pointer">
           <ListPlus className="size-3.5" />Bulk add names
         </button>
       }
@@ -118,7 +118,7 @@ export function BulkAddNonAcademicDialog({ onAdd }: { onAdd: (e: NonAcademicEntr
         <div className="space-y-1.5">
           <div className="flex items-center justify-between">
             <SectionLabel>Names (one per line)</SectionLabel>
-            {count > 0 && <span className="rounded-full bg-rose-50 px-2 py-0.5 text-[10px] font-semibold text-rose-700">{count} name{count !== 1 ? 's' : ''}</span>}
+            {count > 0 && <span className="rounded-full bg-[rgb(var(--type-non-academic)/0.12)] px-2 py-0.5 text-[10px] font-semibold text-[rgb(var(--type-non-academic))]">{count} name{count !== 1 ? 's' : ''}</span>}
           </div>
           <Textarea value={namesRaw} onChange={(e) => setNamesRaw(e.target.value)} placeholder={'Kyla B. Bearneza\nReeman L. Singh'} className="min-h-36 font-mono text-xs" />
         </div>

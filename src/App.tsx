@@ -131,17 +131,17 @@ function SettingsGroup({
 }) {
   const [isOpen, setIsOpen] = useState(defaultOpen)
   return (
-    <div className="rounded-lg border border-stone-200/80 bg-white">
+    <div className="rounded-lg border border-[var(--color-hairline)] bg-white">
       <button
         type="button"
         className="flex w-full items-center justify-between px-3 py-2.5 text-left cursor-pointer"
         onClick={() => setIsOpen(!isOpen)}
       >
-        <span className="text-xs font-semibold uppercase tracking-wider text-stone-500">{title}</span>
-        <ChevronDown className={`size-3.5 text-stone-400 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
+        <span className="text-xs font-semibold uppercase tracking-wider text-[var(--color-muted)]">{title}</span>
+        <ChevronDown className={`size-3.5 text-[var(--color-muted-soft)] transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
       </button>
       {isOpen && (
-        <div className="animate-fade-in space-y-3 border-t border-stone-100 px-3 pb-3 pt-2">
+        <div className="animate-fade-in space-y-3 border-t border-[var(--color-hairline-soft)] px-3 pb-3 pt-2">
           {children}
         </div>
       )}
@@ -169,8 +169,8 @@ function SliderSetting({
   return (
     <div className="space-y-1.5">
       <div className="flex items-center justify-between gap-3">
-        <label className="text-xs font-medium text-stone-600">{label}</label>
-        <span className="rounded bg-stone-100 px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-indigo-600">
+        <label className="text-xs font-medium text-[var(--color-body)]">{label}</label>
+        <span className="rounded bg-[var(--surface-canvas)] px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-[var(--color-primary)]">
           {value}{unit}
         </span>
       </div>
@@ -327,12 +327,12 @@ function App() {
             {/* Document */}
             <SettingsGroup title="Document">
               <div className="space-y-1.5">
-                <label className="text-xs font-medium text-stone-600">Academic year</label>
+                <label className="text-xs font-medium text-[var(--color-body)]">Academic year</label>
                 <Input
                   value={settings.documentYear}
                   onChange={(e) => updateSetting('documentYear', e.target.value)}
                   placeholder="e.g. 2024–2025"
-                  className="h-8 text-xs"
+                  className="h-10 text-xs"
                 />
               </div>
             </SettingsGroup>
@@ -435,7 +435,7 @@ function App() {
 
             {/* Display */}
             <SettingsGroup title="Display">
-              <label className="flex items-center justify-between gap-3 rounded-lg py-1 text-xs font-medium text-stone-600">
+              <label className="flex items-center justify-between gap-3 rounded-lg py-1 text-xs font-medium text-[var(--color-body)]">
                 Show page numbers
                 <span className="toggle-switch">
                   <input
@@ -454,28 +454,28 @@ function App() {
   )
 
   return (
-    <div className="min-h-screen bg-[var(--surface-app)] text-stone-950">
+    <div className="min-h-screen bg-[var(--surface-app)] text-[var(--color-ink)]">
       <div className="mx-auto flex min-h-screen max-w-[1800px] flex-col gap-3 px-3 py-3 xl:px-5">
 
         {/* ── Header ──────────────────────────────────────── */}
-        <header className="rounded-xl border border-slate-800 bg-slate-900 px-4 py-3 text-white shadow-md">
+        <header className="rounded-xl border border-[var(--color-hairline)] bg-white px-4 py-3">
           <div className="flex flex-wrap items-center justify-between gap-3">
 
             {/* Brand */}
             <div className="flex items-center gap-3">
-              <div className="flex size-9 flex-shrink-0 items-center justify-center rounded-lg border border-slate-700 bg-slate-800">
-                <BookOpen className="size-4.5 text-indigo-400" />
+              <div className="flex size-9 flex-shrink-0 items-center justify-center rounded-lg border border-[var(--color-hairline)] bg-[var(--surface-canvas)]">
+                <BookOpen className="size-4.5 text-[var(--color-primary)]" />
               </div>
               <div>
                 <div className="flex items-center gap-2">
-                  <h1 className="text-sm font-bold tracking-tight text-white">Booklet Builder</h1>
+                  <h1 className="text-sm font-semibold tracking-tight text-[var(--color-ink)]">Booklet Builder</h1>
                   {settings.documentYear && (
-                    <span className="rounded border border-indigo-500/30 bg-indigo-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-indigo-300">
+                    <span className="rounded-full border border-[var(--color-hairline-strong)] bg-[var(--surface-strong)] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--color-ink)]">
                       {settings.documentYear}
                     </span>
                   )}
                 </div>
-                <p className="text-[11px] text-slate-400">College Recognition CMS</p>
+                <p className="text-[11px] text-[var(--color-muted)]">College Recognition CMS</p>
               </div>
             </div>
 
@@ -483,22 +483,22 @@ function App() {
             <div className="flex flex-wrap items-center gap-2">
               {/* Document title */}
               <div className="relative">
-                <FileText className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-slate-400" />
+                <FileText className="pointer-events-none absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-[var(--color-muted)]" />
                 <input
                   value={documentTitle}
                   onChange={(event) => setDocumentTitle(event.target.value)}
-                  className="h-8 w-48 rounded-lg border border-slate-700 bg-slate-800 pl-8 pr-3 text-xs text-white placeholder:text-slate-500 transition-colors focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500/40 sm:w-56"
+                  className="h-10 w-48 rounded-md border border-[var(--color-hairline)] bg-[var(--surface-canvas)] pl-9 pr-3 text-xs text-[var(--color-ink)] placeholder:text-[var(--color-muted-soft)] transition-colors focus:border-[var(--color-primary)] focus:outline-none focus:ring-2 focus:ring-[color:color-mix(in_srgb,var(--color-primary)_18%,transparent)] sm:w-56"
                   placeholder="Document title"
                 />
               </div>
 
-              <div className="h-5 w-px bg-slate-700 hidden sm:block" />
+              <div className="hidden h-5 w-px bg-[var(--color-hairline)] sm:block" />
 
               <Button
                 type="button"
                 variant="ghost"
                 size="sm"
-                className="h-8 border border-slate-700 bg-slate-800 px-3 text-xs text-slate-300 hover:bg-slate-700 hover:text-white"
+                className="h-9 border border-[var(--color-hairline)] bg-white px-3 text-xs text-[var(--color-body)] hover:border-[var(--color-hairline-strong)] hover:bg-[var(--surface-canvas)] hover:text-[var(--color-ink)]"
                 onClick={handleReset}
               >
                 <RefreshCw className="size-3.5" />
@@ -508,7 +508,7 @@ function App() {
                 type="button"
                 variant="ghost"
                 size="sm"
-                className="h-8 border border-slate-700 bg-slate-800 px-3 text-xs text-slate-300 hover:bg-slate-700 hover:text-white"
+                className="h-9 border border-[var(--color-hairline)] bg-white px-3 text-xs text-[var(--color-body)] hover:border-[var(--color-hairline-strong)] hover:bg-[var(--surface-canvas)] hover:text-[var(--color-ink)]"
                 onClick={handleExportSvg}
               >
                 <FileImage className="size-3.5" />
@@ -519,7 +519,7 @@ function App() {
               <Button
                 type="button"
                 size="sm"
-                className="h-8 bg-indigo-600 px-3 text-xs text-white hover:bg-indigo-500"
+                className="h-9 px-3 text-xs"
                 onClick={handleExportPdf}
                 disabled={isExporting}
               >
@@ -531,7 +531,7 @@ function App() {
         </header>
 
         {/* ── Mobile tab bar ──────────────────────────────── */}
-        <div className="flex rounded-lg border border-stone-200 bg-white p-1 shadow-sm xl:hidden">
+        <div className="flex rounded-lg border border-[var(--color-hairline)] bg-white p-1 xl:hidden">
           {(
             [
               { key: 'pages', label: 'Pages', icon: LayoutGrid },
@@ -545,8 +545,8 @@ function App() {
               onClick={() => setMobileTab(key)}
               className={`flex flex-1 items-center justify-center gap-1.5 rounded-md py-2 text-xs font-medium transition-colors ${
                 mobileTab === key
-                  ? 'bg-indigo-600 text-white shadow-sm'
-                  : 'text-stone-500 hover:bg-stone-100 hover:text-stone-700'
+                  ? 'bg-[var(--color-primary)] text-white'
+                  : 'text-[var(--color-muted)] hover:bg-[var(--surface-canvas)] hover:text-[var(--color-ink)]'
               }`}
             >
               <Icon className="size-3.5" />
@@ -583,7 +583,7 @@ function App() {
             onMouseDown={handleDragMouseDown}
             title="Drag to resize editor"
           >
-            <GripVertical className="size-3.5 text-stone-300" />
+            <GripVertical className="size-3.5 text-[var(--color-muted-soft)]" />
           </div>
 
           {/* Editor / Settings */}

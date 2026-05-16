@@ -7,7 +7,7 @@ import { cn } from '@/lib/utils'
 import { PAGE_HEIGHT, PAGE_WIDTH, type CmsPage, type CmsSettings } from '@/types/cms'
 
 const RULER_SIZE = 24
-const RULER_FONT = `7.5px Inter, system-ui, -apple-system, sans-serif`
+const RULER_FONT = `7.5px 'JetBrains Mono', 'Fira Code', monospace`
 
 function HorizontalRuler({ zoom, panX, maxVal }: { zoom: number; panX: number; maxVal: number }) {
   const containerRef = useRef<HTMLDivElement>(null)
@@ -37,17 +37,17 @@ function HorizontalRuler({ zoom, panX, maxVal }: { zoom: number; panX: number; m
     ctx.scale(dpr, dpr)
 
     ctx.clearRect(0, 0, size.w, RULER_SIZE)
-    ctx.fillStyle = '#edecea'
+    ctx.fillStyle = '#efeee8'
     ctx.fillRect(0, 0, size.w, RULER_SIZE)
 
-    ctx.strokeStyle = '#c8c5be'
+    ctx.strokeStyle = '#cfcdc4'
     ctx.lineWidth = 0.5
     ctx.beginPath()
     ctx.moveTo(0, RULER_SIZE - 0.5)
     ctx.lineTo(size.w, RULER_SIZE - 0.5)
     ctx.stroke()
 
-    ctx.fillStyle = '#a8a29e'
+    ctx.fillStyle = '#807d72'
     ctx.font = RULER_FONT
     ctx.textBaseline = 'top'
     ctx.textAlign = 'left'
@@ -75,7 +75,7 @@ function HorizontalRuler({ zoom, panX, maxVal }: { zoom: number; panX: number; m
   }, [size, zoom, panX, maxVal])
 
   return (
-    <div ref={containerRef} className="h-full w-full overflow-hidden bg-[#edecea]">
+    <div ref={containerRef} className="h-full w-full overflow-hidden bg-[#efeee8]">
       <canvas ref={canvasRef} style={{ display: 'block' }} />
     </div>
   )
@@ -109,17 +109,17 @@ function VerticalRuler({ zoom, panY, maxVal }: { zoom: number; panY: number; max
     ctx.scale(dpr, dpr)
 
     ctx.clearRect(0, 0, RULER_SIZE, size.h)
-    ctx.fillStyle = '#edecea'
+    ctx.fillStyle = '#efeee8'
     ctx.fillRect(0, 0, RULER_SIZE, size.h)
 
-    ctx.strokeStyle = '#c8c5be'
+    ctx.strokeStyle = '#cfcdc4'
     ctx.lineWidth = 0.5
     ctx.beginPath()
     ctx.moveTo(RULER_SIZE - 0.5, 0)
     ctx.lineTo(RULER_SIZE - 0.5, size.h)
     ctx.stroke()
 
-    ctx.fillStyle = '#a8a29e'
+    ctx.fillStyle = '#807d72'
     ctx.font = RULER_FONT
     ctx.textBaseline = 'middle'
     ctx.textAlign = 'center'
@@ -151,7 +151,7 @@ function VerticalRuler({ zoom, panY, maxVal }: { zoom: number; panY: number; max
   }, [size, zoom, panY, maxVal])
 
   return (
-    <div ref={containerRef} className="h-full w-full overflow-hidden bg-[#edecea]">
+    <div ref={containerRef} className="h-full w-full overflow-hidden bg-[#efeee8]">
       <canvas ref={canvasRef} style={{ display: 'block' }} />
     </div>
   )
@@ -175,11 +175,6 @@ export function CanvasPreview({
 
   const containerRef = useRef<HTMLDivElement>(null)
   const lastPointerRef = useRef<{ x: number; y: number } | null>(null)
-
-  // Keep current page in bounds when pages are added/removed
-  useEffect(() => {
-    setCurrentPageIdx((prev) => Math.min(prev, Math.max(0, pageCount - 1)))
-  }, [pageCount])
 
   const safeIdx = Math.min(currentPageIdx, Math.max(0, pageCount - 1))
   const currentPage = renderedPages[safeIdx]
@@ -276,12 +271,12 @@ export function CanvasPreview({
   const cursorClass = isDragging ? 'cursor-grabbing' : isSpaceDown ? 'cursor-grab' : 'cursor-default'
 
   return (
-    <div className="flex h-full min-h-0 flex-col rounded-xl border border-stone-200/80 bg-white shadow-sm">
+    <div className="flex h-full min-h-0 flex-col rounded-xl border border-[var(--color-hairline)] bg-white">
       {/* Header */}
-      <div className="flex items-center justify-between gap-2 border-b border-stone-100 px-4 py-2.5 z-10 bg-white rounded-t-xl">
+      <div className="z-10 flex items-center justify-between gap-2 rounded-t-xl border-b border-[var(--color-hairline-soft)] bg-white px-4 py-2.5">
         <div className="min-w-0">
-          <h2 className="text-sm font-semibold text-stone-900">Canvas Preview</h2>
-          <p className="truncate text-xs text-stone-400">
+          <h2 className="text-sm font-semibold text-[var(--color-ink)]">Canvas Preview</h2>
+          <p className="truncate text-xs text-[var(--color-muted)]">
             {PAGE_WIDTH} × {PAGE_HEIGHT} · {pageCount} rendered page{pageCount !== 1 ? 's' : ''}
           </p>
         </div>
@@ -297,9 +292,9 @@ export function CanvasPreview({
           >
             <Minus className="size-3.5" />
           </Button>
-          <div className="relative h-1.5 w-16 rounded-full bg-stone-100">
+          <div className="relative h-1.5 w-16 rounded-full bg-[var(--surface-strong)]">
             <div
-              className="absolute inset-y-0 left-0 rounded-full bg-indigo-400/60 transition-all duration-200"
+              className="absolute inset-y-0 left-0 rounded-full bg-[var(--color-primary)] transition-all duration-200"
               style={{ width: `${((zoom - 0.2) / (3 - 0.2)) * 100}%` }}
             />
             <input
@@ -321,7 +316,7 @@ export function CanvasPreview({
           >
             <Plus className="size-3.5" />
           </Button>
-          <span className="w-10 text-center text-[11px] font-medium tabular-nums text-stone-400">
+          <span className="w-10 text-center font-mono text-[11px] font-medium tabular-nums text-[var(--color-muted)]">
             {Math.round(zoom * 100)}%
           </span>
         </div>
@@ -330,7 +325,7 @@ export function CanvasPreview({
       {/* Infinite Canvas Viewport */}
       <div
         ref={containerRef}
-        className={cn('min-h-0 flex-1 relative overflow-hidden bg-[#f5f5f4]', cursorClass)}
+        className={cn('relative min-h-0 flex-1 overflow-hidden bg-[var(--surface-canvas)]', cursorClass)}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
@@ -341,7 +336,7 @@ export function CanvasPreview({
       >
         {/* Top-left corner box */}
         <div
-          className="absolute left-0 top-0 z-20 bg-[#edecea] border-r border-b border-[#c8c5be]"
+          className="absolute left-0 top-0 z-20 border-r border-b border-[#cfcdc4] bg-[#efeee8]"
           style={{ width: RULER_SIZE, height: RULER_SIZE }}
         />
 
@@ -372,14 +367,14 @@ export function CanvasPreview({
         >
           {currentPage ? (
             <div
-              className="absolute bg-white shadow-[0_1px_4px_rgba(0,0,0,0.06),0_4px_16px_rgba(0,0,0,0.05)] ring-1 ring-stone-900/5 transition-opacity animate-fade-in"
+              className="absolute animate-fade-in border border-[var(--color-hairline)] bg-white transition-opacity"
               style={{ width: PAGE_WIDTH * zoom, height: PAGE_HEIGHT * zoom }}
             >
               {currentPage.blocks.map((block) => (
                 <div
                   key={block.id}
                   className={cn(
-                    'absolute whitespace-pre text-stone-950 pointer-events-none',
+                    'pointer-events-none absolute whitespace-pre text-[var(--color-ink)]',
                     block.uppercase && 'uppercase'
                   )}
                   style={{
@@ -401,15 +396,15 @@ export function CanvasPreview({
             </div>
           ) : (
             <div className="absolute left-0 top-0 translate-x-[100px] translate-y-[50px]">
-              <p className="text-sm font-medium text-stone-400">No pages to preview.</p>
+              <p className="text-sm font-medium text-[var(--color-muted)]">No pages to preview.</p>
             </div>
           )}
         </div>
       </div>
 
       {/* Footer Navigation */}
-      <div className="flex items-center justify-between gap-3 border-t border-stone-200 px-4 py-2.5 bg-stone-50 rounded-b-xl z-10">
-        <div className="text-xs font-medium text-stone-500">
+      <div className="z-10 flex items-center justify-between gap-3 rounded-b-xl border-t border-[var(--color-hairline)] bg-[var(--surface-canvas)] px-4 py-2.5">
+        <div className="text-xs font-medium text-[var(--color-muted)]">
           Page {pageCount > 0 ? safeIdx + 1 : 0} of {pageCount}
         </div>
         <div className="flex items-center gap-1">
@@ -417,7 +412,7 @@ export function CanvasPreview({
             type="button"
             variant="outline"
             size="sm"
-            className="h-7 px-3 text-xs text-stone-600 hover:text-stone-900"
+            className="h-8 px-3 text-xs text-[var(--color-body)] hover:text-[var(--color-ink)]"
             disabled={safeIdx === 0 || pageCount === 0}
             onClick={goToPrev}
           >
@@ -428,7 +423,7 @@ export function CanvasPreview({
             type="button"
             variant="outline"
             size="sm"
-            className="h-7 px-3 text-xs text-stone-600 hover:text-stone-900"
+            className="h-8 px-3 text-xs text-[var(--color-body)] hover:text-[var(--color-ink)]"
             disabled={safeIdx >= pageCount - 1 || pageCount === 0}
             onClick={goToNext}
           >
