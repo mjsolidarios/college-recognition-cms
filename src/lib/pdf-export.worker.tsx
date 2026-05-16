@@ -1,4 +1,4 @@
-import type { PdfExportWorkerRequest, PdfExportWorkerResponse } from '@/lib/pdf-export-worker'
+import { PDF_EXPORT_FAILURE_MESSAGE, type PdfExportWorkerRequest, type PdfExportWorkerResponse } from '@/lib/pdf-export-worker'
 import { renderPdfBlob } from '@/lib/pdf-render'
 
 const workerScope = globalThis
@@ -17,7 +17,7 @@ workerScope.addEventListener('message', async (event: MessageEvent<PdfExportWork
     const response: PdfExportWorkerResponse = {
       id: event.data.id,
       ok: false,
-      error: error instanceof Error ? error.message : 'Failed to generate the PDF export.',
+      error: error instanceof Error ? error.message : PDF_EXPORT_FAILURE_MESSAGE,
     }
     workerPostMessage(response)
   }

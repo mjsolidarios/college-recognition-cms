@@ -1,5 +1,5 @@
 import { getRenderedBlockLines } from '@/lib/layout'
-import type { PdfExportWorkerRequest, PdfExportWorkerResponse } from '@/lib/pdf-export-worker'
+import { PDF_EXPORT_FAILURE_MESSAGE, type PdfExportWorkerRequest, type PdfExportWorkerResponse } from '@/lib/pdf-export-worker'
 import { downloadFile, slugify } from '@/lib/utils'
 import { PAGE_HEIGHT, PAGE_WIDTH, type RenderedPage } from '@/types/cms'
 
@@ -28,7 +28,14 @@ let pdfExportWorker: Worker | null = null
 let pdfExportRequestCounter = 0
 
 function getPdfExportWorker() {
-  pdfExportWorker ??= new Worker(new URL('./pdf-export.worker.tsx', import.meta.url), { type: 'module' })
+  if (!pdfExportWorker) {
+    try {
+      pdfExportWorker = new Worker(new URL('./pdf-export.worker.tsx', import.meta.url), { type: 'module' })
+    } catch (error) {
+      throw new Error('Failed to initialize the PDF export worker.', { cause: error })
+    }
+  }
+
   return pdfExportWorker
 }
 
@@ -61,7 +68,7 @@ function renderPdfInWorker(pages: RenderedPage[]) {
     }
     const handleError = (event: ErrorEvent) => {
       cleanup()
-      reject(event.error instanceof Error ? event.error : new Error(event.message || 'Failed to generate the PDF export.'))
+      reject(event.error instanceof Error ? event.error : new Error(event.message || PDF_EXPORT_FAILURE_MESSAGE))
     }
 
     worker.addEventListener('message', handleMessage)
