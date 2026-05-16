@@ -19,7 +19,7 @@ const PARAGRAPH_GAP = 6
 const ITEM_GAP = 2
 /** Pixels inset for faculty name lists under “Permanent Faculty:” / “Part-time Lecturers:”. */
 const CORE_LIST_INDENT = 14
-/** Indent used for awardee name lists so wrapped continuations stay visually nested under each award heading. */
+/** Indent used when awardee names wrap to multiple lines so continuations stay nested under each award heading. */
 const AWARDEE_LIST_INDENT = 12
 const FONT_FAMILY = 'Georgia, "Times New Roman", serif'
 /** Shrink wrap width slightly so layout reserves at least as many lines as the canvas / PDF renderer. */
@@ -99,7 +99,7 @@ function getColumnX(settings: CmsSettings, column: 0 | 1) {
 }
 
 function transformLineForRender(text: string, uppercase?: boolean) {
-  if (!text) {
+  if (text.length === 0) {
     return text
   }
   return uppercase ? text.toUpperCase() : text
@@ -223,6 +223,12 @@ function splitLongToken(token: string, width: number, options: MeasureOptions) {
     if (measureWidth(remaining, options) <= width) {
       parts.push(remaining)
       break
+    }
+
+    if (measureWidth(remaining[0], options) > width) {
+      parts.push(remaining[0])
+      remaining = remaining.slice(1)
+      continue
     }
 
     let low = 1
@@ -433,7 +439,7 @@ function addLinesToFlow(context: LayoutContext, options: TextOptions) {
     xFor,
   } = resolved
   const reserveHeight = options.reserveHeight ?? 0
-  const maxBlockHeight = context.maxContentY - context.contentTop
+  const maxContentHeight = context.maxContentY - context.contentTop
 
   const resolveColumn = (): 0 | 1 => (pinned !== undefined ? pinned : context.currentColumn)
 
@@ -456,7 +462,8 @@ function addLinesToFlow(context: LayoutContext, options: TextOptions) {
 
   if (options.allowSplit === false) {
     const height = lines.length * lineHeight
-    const effectiveReserve = height + reserveHeight <= maxBlockHeight ? reserveHeight : 0
+    // If a block already consumes a full page, drop the keep-with-next reserve so it can still render.
+    const effectiveReserve = height + reserveHeight <= maxContentHeight ? reserveHeight : 0
     let guard = 0
     while (guard < 48) {
       const col = resolveColumn()
@@ -467,7 +474,7 @@ function addLinesToFlow(context: LayoutContext, options: TextOptions) {
       guard += 1
     }
 
-    if (height <= maxBlockHeight) {
+    if (height <= maxContentHeight) {
       const col = resolveColumn()
       context.renderedPages[context.currentPageIndex].blocks.push({
         id: `${options.idPrefix}-${context.currentPageIndex}-${col}`,
@@ -486,6 +493,8 @@ function addLinesToFlow(context: LayoutContext, options: TextOptions) {
       context.currentY[col] += height + blockSpacing
       return
     }
+
+    // Blocks that cannot fit on a single page fall through to the splitting logic below.
   }
 
   let remainingLines = [...lines]
@@ -498,9 +507,11 @@ function addLinesToFlow(context: LayoutContext, options: TextOptions) {
     const availableLines = Math.floor(availableHeight / lineHeight)
     const requiredLines = remainingLines.length > minFragmentLines ? minFragmentLines : 1
     const keepReserve =
-      blockIndex === 0 && requiredLines * lineHeight + reserveHeight <= maxBlockHeight ? reserveHeight : 0
+      blockIndex === 0 && requiredLines * lineHeight + reserveHeight <= maxContentHeight ? reserveHeight : 0
+    const lacksRequiredLines = availableLines < requiredLines
+    const violatesReservedSpace = context.currentY[col] + requiredLines * lineHeight + keepReserve > context.maxContentY
 
-    if (availableLines < requiredLines || context.currentY[col] + requiredLines * lineHeight + keepReserve > context.maxContentY) {
+    if (lacksRequiredLines || violatesReservedSpace) {
       advanceWhenFull()
       continue
     }
@@ -855,6 +866,7 @@ function renderProgramPage(context: LayoutContext, rows: ProgramRow[]) {
     let currentRowTop = Math.max(context.currentY[0], context.currentY[1])
     const minimumRowHeight = Math.max(leftTitleReserve + leftBodyReserve, rightTitleReserve + rightBodyReserve)
 
+    // Only push the row to the next page when we are already mid-page; a fresh page should use all available space.
     if (currentRowTop > context.contentTop && context.maxContentY - currentRowTop < minimumRowHeight) {
       advanceToNextPage(context)
       currentRowTop = context.contentTop

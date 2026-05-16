@@ -9,6 +9,7 @@ import { PAGE_HEIGHT, PAGE_WIDTH, type RenderedPage } from '@/types/cms'
 const RULER_SIZE = 24
 const RULER_FONT = `7.5px 'JetBrains Mono', 'Fira Code', monospace`
 
+/** DOM height required to show all precomputed lines for a text block at the current zoom level. */
 function getBlockPreviewHeight(block: RenderedPage['blocks'][number], zoom: number) {
   return block.lines.length * block.lineHeight * zoom
 }
@@ -391,7 +392,7 @@ export function CanvasPreview({
                     letterSpacing: `${(block.letterSpacing ?? 0) * zoom}px`,
                     textAlign: block.align,
                     fontFamily: 'Georgia, "Times New Roman", serif',
-                    overflow: 'clip',
+                    overflow: 'hidden',
                   }}
                 >
                   {getRenderedBlockLines(block).join('\n')}
