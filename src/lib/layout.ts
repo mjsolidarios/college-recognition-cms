@@ -1051,9 +1051,9 @@ function flowAtLayoutContext(context: LayoutContext, column: 0 | 1): number {
 function measureCoreSectionFlowSpan(page: CorePage, settings: CmsSettings, section: CoreSection): number {
   const context = createLayoutContext(page, settings, 1)
   setContextToFlowPosition(context, 0)
-  const start = Math.min(flowAtLayoutContext(context, 0), flowAtLayoutContext(context, 1))
+  const start = flowAtLayoutContext(context, context.currentColumn)
   renderCoreSection(context, section, `measure-${section.id}`)
-  const end = Math.max(flowAtLayoutContext(context, 0), flowAtLayoutContext(context, 1))
+  const end = flowAtLayoutContext(context, context.currentColumn)
   return Math.max(FLOW_PACK_GAP, end - start)
 }
 
