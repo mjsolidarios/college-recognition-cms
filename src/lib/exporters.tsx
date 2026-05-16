@@ -1,4 +1,5 @@
 import { getRenderedBlockLines } from '@/lib/layout'
+import type { PdfExportWorkerRequest, PdfExportWorkerResponse } from '@/lib/pdf-export-worker'
 import { downloadFile, slugify } from '@/lib/utils'
 import { PAGE_HEIGHT, PAGE_WIDTH, type RenderedPage } from '@/types/cms'
 
@@ -23,23 +24,64 @@ function renderSvgBlock(block: RenderedPage['blocks'][number]) {
     .join('')}</text>`
 }
 
+let pdfExportWorker: Worker | null = null
+
+function getPdfExportWorker() {
+  pdfExportWorker ??= new Worker(new URL('./pdf-export.worker.tsx', import.meta.url), { type: 'module' })
+  return pdfExportWorker
+}
+
+function createPdfExportRequestId() {
+  return globalThis.crypto?.randomUUID?.() ?? `pdf-export-${Date.now()}-${Math.random().toString(36).slice(2)}`
+}
+
+function renderPdfInWorker(pages: RenderedPage[]) {
+  return new Promise<Blob>((resolve, reject) => {
+    const worker = getPdfExportWorker()
+    const requestId = createPdfExportRequestId()
+    const cleanup = () => {
+      worker.removeEventListener('message', handleMessage)
+      worker.removeEventListener('error', handleError)
+    }
+    const handleMessage = (event: MessageEvent<PdfExportWorkerResponse>) => {
+      if (event.data.id !== requestId) {
+        return
+      }
+
+      cleanup()
+
+      if (!event.data.ok) {
+        reject(new Error(event.data.error))
+        return
+      }
+
+      resolve(new Blob([event.data.buffer], { type: 'application/pdf' }))
+    }
+    const handleError = (event: ErrorEvent) => {
+      cleanup()
+      reject(event.error instanceof Error ? event.error : new Error(event.message || 'Failed to generate the PDF export.'))
+    }
+
+    worker.addEventListener('message', handleMessage)
+    worker.addEventListener('error', handleError)
+    worker.postMessage({ id: requestId, pages } satisfies PdfExportWorkerRequest)
+  })
+}
+
+async function renderPdfOnMainThread(pages: RenderedPage[]) {
+  const pdfRenderModule = await import('@/lib/pdf-render')
+  return pdfRenderModule.renderPdfBlob(pages)
+}
+
 export async function exportPdfDocument(pages: RenderedPage[], title: string) {
-  const [rendererModule, pdfDocumentModule] = await Promise.all([
-    import('@react-pdf/renderer'),
-    import('@/components/pdf-document'),
-  ])
-  const createPdf = rendererModule.pdf
-  const PdfDocument = pdfDocumentModule.PdfDocument
+  let blob: Blob
 
-  if (typeof createPdf !== 'function') {
-    throw new Error('Failed to load @react-pdf/renderer for PDF export.')
+  try {
+    blob = await renderPdfInWorker(pages)
+  } catch {
+    blob = await renderPdfOnMainThread(pages)
   }
 
-  if (typeof PdfDocument === 'undefined') {
-    throw new Error('Failed to load the PdfDocument component for PDF export.')
-  }
-
-  const blob = await createPdf(<PdfDocument pages={pages} />).toBlob()
   downloadFile(blob, `${slugify(title) || 'college-recognition'}.pdf`)
 }
 
