@@ -24,11 +24,18 @@ function renderSvgBlock(block: RenderedPage['blocks'][number]) {
 }
 
 export async function exportPdfDocument(pages: RenderedPage[], title: string) {
-  const [{ pdf }, { PdfDocument }] = await Promise.all([
+  const [rendererModule, pdfDocumentModule] = await Promise.all([
     import('@react-pdf/renderer'),
     import('@/components/pdf-document'),
   ])
-  const blob = await pdf(<PdfDocument pages={pages} />).toBlob()
+  const createPdf = rendererModule.pdf
+  const PdfDocument = pdfDocumentModule.PdfDocument
+
+  if (typeof createPdf !== 'function' || typeof PdfDocument !== 'function') {
+    throw new Error('PDF export dependencies failed to load.')
+  }
+
+  const blob = await createPdf(<PdfDocument pages={pages} />).toBlob()
   downloadFile(blob, `${slugify(title) || 'college-recognition'}.pdf`)
 }
 
