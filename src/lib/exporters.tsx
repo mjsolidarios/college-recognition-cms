@@ -1,6 +1,3 @@
-import { pdf } from '@react-pdf/renderer'
-
-import { PdfDocument } from '@/components/pdf-document'
 import { getRenderedBlockLines } from '@/lib/layout'
 import { downloadFile, slugify } from '@/lib/utils'
 import { PAGE_HEIGHT, PAGE_WIDTH, type RenderedPage } from '@/types/cms'
@@ -27,7 +24,22 @@ function renderSvgBlock(block: RenderedPage['blocks'][number]) {
 }
 
 export async function exportPdfDocument(pages: RenderedPage[], title: string) {
-  const blob = await pdf(<PdfDocument pages={pages} />).toBlob()
+  const [rendererModule, pdfDocumentModule] = await Promise.all([
+    import('@react-pdf/renderer'),
+    import('@/components/pdf-document'),
+  ])
+  const createPdf = rendererModule.pdf
+  const PdfDocument = pdfDocumentModule.PdfDocument
+
+  if (typeof createPdf !== 'function') {
+    throw new Error('Failed to load @react-pdf/renderer for PDF export.')
+  }
+
+  if (typeof PdfDocument === 'undefined') {
+    throw new Error('Failed to load the PdfDocument component for PDF export.')
+  }
+
+  const blob = await createPdf(<PdfDocument pages={pages} />).toBlob()
   downloadFile(blob, `${slugify(title) || 'college-recognition'}.pdf`)
 }
 

@@ -192,6 +192,9 @@ function SliderSetting({
 const MIN_EDITOR_WIDTH = 280
 const MAX_EDITOR_WIDTH = 560
 const DEFAULT_EDITOR_WIDTH = 360
+/** Wait two animation frames: one for React to commit, one for the browser to paint the exporting state. */
+const waitForUiUpdate = () =>
+  new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())))
 
 function App() {
   const [pages, setPages] = useState<CmsPage[]>(() => getPages())
@@ -266,6 +269,7 @@ function App() {
   const handleExportPdf = async () => {
     setIsExporting(true)
     try {
+      await waitForUiUpdate()
       await exportPdfDocument(renderedPages, documentTitle)
     } finally {
       setIsExporting(false)
