@@ -25,6 +25,7 @@ function renderSvgBlock(block: RenderedPage['blocks'][number]) {
 }
 
 let pdfExportWorker: Worker | null = null
+let pdfExportRequestCounter = 0
 
 function getPdfExportWorker() {
   pdfExportWorker ??= new Worker(new URL('./pdf-export.worker.tsx', import.meta.url), { type: 'module' })
@@ -32,7 +33,8 @@ function getPdfExportWorker() {
 }
 
 function createPdfExportRequestId() {
-  return globalThis.crypto?.randomUUID?.() ?? `pdf-export-${Date.now()}-${Math.random().toString(36).slice(2)}`
+  pdfExportRequestCounter += 1
+  return globalThis.crypto?.randomUUID?.() ?? `pdf-export-${Date.now()}-${pdfExportRequestCounter}`
 }
 
 function renderPdfInWorker(pages: RenderedPage[]) {
@@ -78,7 +80,8 @@ export async function exportPdfDocument(pages: RenderedPage[], title: string) {
 
   try {
     blob = await renderPdfInWorker(pages)
-  } catch {
+  } catch (error) {
+    console.warn('PDF export worker failed; retrying on the main thread.', error)
     blob = await renderPdfOnMainThread(pages)
   }
 
