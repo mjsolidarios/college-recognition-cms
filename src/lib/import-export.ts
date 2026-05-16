@@ -9,6 +9,8 @@ export interface BookletExport {
   exportedAt: string
   pages: CmsPage[]
   settings?: CmsSettings
+  frontCover?: string | null
+  backCover?: string | null
 }
 
 /* ── Export ────────────────────────────────────────────────── */
@@ -17,6 +19,8 @@ export function exportBooklet(
   pages: CmsPage[],
   settings: CmsSettings,
   title: string,
+  frontCover?: string | null,
+  backCover?: string | null,
 ): string {
   const data: BookletExport = {
     version: 1,
@@ -24,6 +28,8 @@ export function exportBooklet(
     exportedAt: new Date().toISOString(),
     pages: [...pages].sort((a, b) => a.order - b.order),
     settings,
+    frontCover: frontCover ?? null,
+    backCover: backCover ?? null,
   }
   return JSON.stringify(data, null, 2)
 }
@@ -204,6 +210,9 @@ export function validateBookletImport(raw: unknown): ValidationResult {
     ? { ...defaultSettings, ...(raw.settings as Partial<CmsSettings>) }
     : undefined
 
+  const frontCover = typeof raw.frontCover === 'string' ? raw.frontCover : null
+  const backCover = typeof raw.backCover === 'string' ? raw.backCover : null
+
   return {
     valid: true,
     data: {
@@ -212,6 +221,8 @@ export function validateBookletImport(raw: unknown): ValidationResult {
       exportedAt: typeof raw.exportedAt === 'string' ? raw.exportedAt : new Date().toISOString(),
       pages: normalizedPages,
       settings: normalizedSettings,
+      frontCover,
+      backCover,
     },
   }
 }

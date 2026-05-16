@@ -74,9 +74,19 @@ function drawPage(doc: jsPDF, page: RenderedPage) {
 export async function renderPdfBlob(
   pages: RenderedPage[],
   onPage?: (current: number, total: number) => void,
+  frontCover?: string | null,
+  backCover?: string | null,
 ) {
   const { jsPDF } = await import('jspdf')
-  const total = pages.length
+
+  // Build ordered list of "slots": cover images or rendered pages
+  type Slot = { kind: 'cover'; dataUrl: string } | { kind: 'page'; page: RenderedPage }
+  const slots: Slot[] = []
+  if (frontCover) slots.push({ kind: 'cover', dataUrl: frontCover })
+  for (const page of pages) slots.push({ kind: 'page', page })
+  if (backCover) slots.push({ kind: 'cover', dataUrl: backCover })
+
+  const total = slots.length
 
   if (total === 0) {
     const doc = new jsPDF(PDF_DOC_OPTIONS)
@@ -84,13 +94,24 @@ export async function renderPdfBlob(
   }
 
   const doc = new jsPDF(PDF_DOC_OPTIONS)
-  drawPage(doc, pages[0]!)
+
+  const drawSlot = (slot: Slot) => {
+    if (slot.kind === 'cover') {
+      doc.setFillColor(255, 255, 255)
+      doc.rect(0, 0, PAGE_WIDTH, PAGE_HEIGHT, 'F')
+      doc.addImage(slot.dataUrl, 0, 0, PAGE_WIDTH, PAGE_HEIGHT)
+    } else {
+      drawPage(doc, slot.page)
+    }
+  }
+
+  drawSlot(slots[0]!)
   onPage?.(0, total)
 
   for (let index = 1; index < total; index += 1) {
     await yieldToMain()
     doc.addPage([PAGE_WIDTH, PAGE_HEIGHT], 'p')
-    drawPage(doc, pages[index]!)
+    drawSlot(slots[index]!)
     onPage?.(index, total)
   }
 

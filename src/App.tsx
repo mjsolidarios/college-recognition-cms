@@ -26,9 +26,10 @@ import { FONT_OPTIONS } from '@/lib/fonts'
 import { exportPdfDocument, exportSvgDocument, warmPdfExportWorker } from '@/lib/exporters'
 import { renderDocument } from '@/lib/layout'
 import { defaultSettings, seedPages } from '@/lib/sample-data'
-import { deletePage, getPages, getSettings, savePage, saveSettings } from '@/lib/storage'
+import { deletePage, getPages, getSettings, savePage, saveSettings, getFrontCover, saveFrontCover, getBackCover, saveBackCover } from '@/lib/storage'
 import { progressPercent, type PdfExportProgress } from '@/lib/pdf-worker-protocol'
 import type { CmsPage, CmsSettings, FontPreset, PageType } from '@/types/cms'
+import { PAGE_WIDTH, PAGE_HEIGHT } from '@/types/cms'
 
 const PAGE_LABELS: Record<PageType, string> = {
   core: 'Core Page',
@@ -216,6 +217,8 @@ function App() {
   const [settings, setSettings] = useState<CmsSettings>(() => getSettings())
   const [activePageId, setActivePageId] = useState(() => getPages()[0]?.id ?? '')
   const [documentTitle, setDocumentTitle] = useState('College Recognition Program')
+  const [frontCover, setFrontCover] = useState<string | null>(() => getFrontCover())
+  const [backCover, setBackCover] = useState<string | null>(() => getBackCover())
   const [isExporting, setIsExporting] = useState(false)
   const [pdfExportProgress, setPdfExportProgress] = useState<PdfExportProgress | null>(null)
   const [mobileTab, setMobileTab] = useState<MobileTab>('canvas')
@@ -223,6 +226,7 @@ function App() {
   const dragRef = useRef<{ startX: number; startWidth: number } | null>(null)
 
   const [previewPageIndex, setPreviewPageIndex] = useState(0)
+  const [coverUploadError, setCoverUploadError] = useState<string | null>(null)
 
   const activePage = useMemo(
     () => pages.find((page) => page.id === activePageId) ?? pages[0],
@@ -285,10 +289,15 @@ function App() {
     setSettings(saveSettings(defaultSettings))
     setActivePageId(seedPages[0].id)
     setPreviewPageIndex(0)
+    saveFrontCover(null)
+    setFrontCover(null)
+    saveBackCover(null)
+    setBackCover(null)
   }
 
   const handleExportPdf = async () => {
-    const total = renderedPages.length
+    const coverCount = (frontCover ? 1 : 0) + (backCover ? 1 : 0)
+    const total = renderedPages.length + coverCount
     setIsExporting(true)
     setPdfExportProgress({
       phase: 'prepare',
@@ -298,7 +307,7 @@ function App() {
     })
     try {
       await waitForUiUpdate()
-      await exportPdfDocument(renderedPages, documentTitle, setPdfExportProgress)
+      await exportPdfDocument(renderedPages, documentTitle, setPdfExportProgress, frontCover, backCover)
     } finally {
       setIsExporting(false)
       setPdfExportProgress(null)
@@ -310,10 +319,10 @@ function App() {
     if (!page) {
       return
     }
-    exportSvgDocument([page], documentTitle)
+    exportSvgDocument([page], documentTitle, frontCover, backCover)
   }
 
-  const handleImport = (importedPages: CmsPage[], importedSettings?: CmsSettings, importedTitle?: string) => {
+  const handleImport = (importedPages: CmsPage[], importedSettings?: CmsSettings, importedTitle?: string, importedFrontCover?: string | null, importedBackCover?: string | null) => {
     // Clear existing pages from storage first
     pages.forEach((page) => deletePage(page.id))
     persistPages(importedPages)
@@ -322,6 +331,14 @@ function App() {
     }
     if (importedTitle) {
       setDocumentTitle(importedTitle)
+    }
+    if (importedFrontCover !== undefined) {
+      saveFrontCover(importedFrontCover)
+      setFrontCover(importedFrontCover)
+    }
+    if (importedBackCover !== undefined) {
+      saveBackCover(importedBackCover)
+      setBackCover(importedBackCover)
     }
     setActivePageId(importedPages[0]?.id ?? '')
     setPreviewPageIndex(0)
@@ -354,6 +371,54 @@ function App() {
     handleAddPage(type)
     setMobileTab('canvas')
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  /* ── Cover upload helper ────────────────────────────────── */
+  const coverFileRef = useRef<{ front: HTMLInputElement | null; back: HTMLInputElement | null }>({ front: null, back: null })
+
+  const loadCoverFile = (file: File): Promise<string> =>
+    new Promise((resolve, reject) => {
+      const url = URL.createObjectURL(file)
+      const img = new window.Image()
+      img.onload = () => {
+        const canvas = document.createElement('canvas')
+        canvas.width = PAGE_WIDTH
+        canvas.height = PAGE_HEIGHT
+        const ctx = canvas.getContext('2d')!
+        ctx.fillStyle = '#ffffff'
+        ctx.fillRect(0, 0, PAGE_WIDTH, PAGE_HEIGHT)
+        ctx.drawImage(img, 0, 0, PAGE_WIDTH, PAGE_HEIGHT)
+        URL.revokeObjectURL(url)
+        resolve(canvas.toDataURL('image/png'))
+      }
+      img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Failed to load image')) }
+      img.src = url
+    })
+
+  const handleCoverUpload = async (which: 'front' | 'back', file: File) => {
+    setCoverUploadError(null)
+    try {
+      const dataUrl = await loadCoverFile(file)
+      if (which === 'front') {
+        saveFrontCover(dataUrl)
+        setFrontCover(dataUrl)
+      } else {
+        saveBackCover(dataUrl)
+        setBackCover(dataUrl)
+      }
+    } catch {
+      setCoverUploadError('Failed to load the image. Please try a different file.')
+    }
+  }
+
+  const handleCoverClear = (which: 'front' | 'back') => {
+    if (which === 'front') {
+      saveFrontCover(null)
+      setFrontCover(null)
+    } else {
+      saveBackCover(null)
+      setBackCover(null)
+    }
+  }
 
   /* ── Shared editor/settings panel ──────────────────────── */
   const EditorSettingsPanel = (
@@ -547,6 +612,80 @@ function App() {
                 </span>
               </label>
             </SettingsGroup>
+
+            {/* Covers */}
+            <SettingsGroup title="Covers" defaultOpen={false}>
+              <p className="text-[11px] leading-snug text-[var(--color-muted)]">
+                Upload a front and/or back cover image (PNG, JPG, or SVG). Covers are scaled to fit the page and included in PDF and SVG exports.
+              </p>
+              {coverUploadError && (
+                <p className="text-[11px] font-medium text-red-600">{coverUploadError}</p>
+              )}
+              {/* Front cover */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-[var(--color-body)]">Front cover</label>
+                {frontCover ? (
+                  <div className="relative overflow-hidden rounded-md border border-[var(--color-hairline)] bg-[var(--surface-canvas)]">
+                    <img src={frontCover} alt="Front cover preview" className="w-full object-contain" style={{ maxHeight: 120 }} />
+                    <button
+                      type="button"
+                      onClick={() => handleCoverClear('front')}
+                      className="absolute right-1.5 top-1.5 flex size-6 items-center justify-center rounded-full bg-white/90 text-[var(--color-muted)] shadow-sm hover:text-red-600 cursor-pointer"
+                      title="Remove front cover"
+                    >
+                      ×
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => coverFileRef.current.front?.click()}
+                    className="cover-upload-btn"
+                  >
+                    <FileImage className="size-4" />Upload front cover
+                  </button>
+                )}
+                <input
+                  ref={(el) => { coverFileRef.current.front = el }}
+                  type="file"
+                  accept="image/*,.svg"
+                  className="hidden"
+                  onChange={(e) => { const f = e.target.files?.[0]; if (f) { void handleCoverUpload('front', f) } e.target.value = '' }}
+                />
+              </div>
+              {/* Back cover */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-[var(--color-body)]">Back cover</label>
+                {backCover ? (
+                  <div className="relative overflow-hidden rounded-md border border-[var(--color-hairline)] bg-[var(--surface-canvas)]">
+                    <img src={backCover} alt="Back cover preview" className="w-full object-contain" style={{ maxHeight: 120 }} />
+                    <button
+                      type="button"
+                      onClick={() => handleCoverClear('back')}
+                      className="absolute right-1.5 top-1.5 flex size-6 items-center justify-center rounded-full bg-white/90 text-[var(--color-muted)] shadow-sm hover:text-red-600 cursor-pointer"
+                      title="Remove back cover"
+                    >
+                      ×
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => coverFileRef.current.back?.click()}
+                    className="cover-upload-btn"
+                  >
+                    <FileImage className="size-4" />Upload back cover
+                  </button>
+                )}
+                <input
+                  ref={(el) => { coverFileRef.current.back = el }}
+                  type="file"
+                  accept="image/*,.svg"
+                  className="hidden"
+                  onChange={(e) => { const f = e.target.files?.[0]; if (f) { void handleCoverUpload('back', f) } e.target.value = '' }}
+                />
+              </div>
+            </SettingsGroup>
           </div>
         </ScrollArea>
       </TabsContent>
@@ -614,7 +753,7 @@ function App() {
                 <FileImage className="size-3.5" />
                 <span className="hidden sm:inline">SVG</span>
               </Button>
-              <ExportDialog pages={pages} settings={settings} title={documentTitle} />
+              <ExportDialog pages={pages} settings={settings} title={documentTitle} frontCover={frontCover} backCover={backCover} />
               <ImportDialog pages={pages} onImport={handleImport} />
               <div className="flex min-w-[7.5rem] flex-col items-stretch gap-1">
                 <Button
@@ -701,10 +840,11 @@ function App() {
                 renderedPages={renderedPages}
                 previewPageIndex={safePreviewPageIndex}
                 onPreviewPageChange={setPreviewPageIndex}
+                frontCover={frontCover}
+                backCover={backCover}
               />
           </div>
 
-          {/* Resize handle */}
           <div
             className="flex w-2 flex-shrink-0 cursor-col-resize items-center justify-center rounded"
             onMouseDown={handleDragMouseDown}
@@ -736,6 +876,8 @@ function App() {
                 renderedPages={renderedPages}
                 previewPageIndex={safePreviewPageIndex}
                 onPreviewPageChange={setPreviewPageIndex}
+                frontCover={frontCover}
+                backCover={backCover}
               />
           </div>
           <div className={mobileTab === 'editor' ? 'block h-full' : 'hidden'}>

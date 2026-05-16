@@ -234,3 +234,26 @@ input[type="range"]::-moz-range-thumb:hover {
 ::-webkit-scrollbar-thumb:hover {
   background: var(--color-muted-soft);
 }
+
+/* ── Cover upload drop target ────────────────────────────── */
+.cover-upload-btn {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border-radius: 0.5rem;
+  border: 2px dashed var(--color-hairline-strong);
+  padding: 1rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--color-muted);
+  transition: border-color 150ms ease, background-color 150ms ease, color 150ms ease;
+  cursor: pointer;
+}
+
+.cover-upload-btn:hover {
+  border-color: var(--color-primary);
+  background-color: color-mix(in srgb, var(--color-primary) 8%, white);
+  color: var(--color-primary);
+}
