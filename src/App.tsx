@@ -24,6 +24,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { FONT_OPTIONS } from '@/lib/fonts'
 import { exportPdfDocument, exportSvgDocument, warmPdfExportWorker } from '@/lib/exporters'
+import {
+  flowPositionsEqual,
+  getCoreSectionFlowPosition,
+  setCoreSectionFlowPosition,
+  type SectionFlowCommand,
+} from '@/lib/core-section-flow'
 import { snapFlowPosition } from '@/lib/flow-position'
 import { renderDocument } from '@/lib/layout'
 import { defaultSettings, seedPages } from '@/lib/sample-data'
@@ -228,6 +234,10 @@ function App() {
 
   const [previewPageIndex, setPreviewPageIndex] = useState(0)
   const [coverUploadError, setCoverUploadError] = useState<string | null>(null)
+  const [sectionFlowUndo, setSectionFlowUndo] = useState<SectionFlowCommand[]>([])
+  const [sectionFlowRedo, setSectionFlowRedo] = useState<SectionFlowCommand[]>([])
+  const pagesRef = useRef(pages)
+  pagesRef.current = pages
 
   const activePage = useMemo(
     () => pages.find((page) => page.id === activePageId) ?? pages[0],
@@ -257,24 +267,75 @@ function App() {
     persistPages(nextPages)
   }
 
+  const clearSectionFlowHistory = useCallback(() => {
+    setSectionFlowUndo([])
+    setSectionFlowRedo([])
+  }, [])
+
   const handleCoreSectionReposition = (pageId: string, sectionId: string, flowPosition: number) => {
-    const snapped = snapFlowPosition(flowPosition)
-    const nextPages = pages.map((page) => {
-      if (page.id !== pageId || page.type !== 'core') {
-        return page
-      }
-      return {
-        ...page,
-        content: {
-          ...page.content,
-          sections: page.content.sections.map((section) =>
-            section.id === sectionId ? { ...section, flowPosition: snapped } : section,
-          ),
-        },
-      }
-    })
-    persistPages(nextPages)
+    const from = getCoreSectionFlowPosition(pagesRef.current, pageId, sectionId)
+    const to = snapFlowPosition(flowPosition)
+    if (flowPositionsEqual(from, to)) {
+      return
+    }
+    setSectionFlowUndo((stack) => [...stack, { pageId, sectionId, from, to }])
+    setSectionFlowRedo([])
+    persistPages(setCoreSectionFlowPosition(pagesRef.current, pageId, sectionId, to))
   }
+
+  const handleUndoSectionFlow = useCallback(() => {
+    setSectionFlowUndo((stack) => {
+      if (stack.length === 0) {
+        return stack
+      }
+      const cmd = stack[stack.length - 1]!
+      setSectionFlowRedo((redo) => [...redo, cmd])
+      persistPages(setCoreSectionFlowPosition(pagesRef.current, cmd.pageId, cmd.sectionId, cmd.from))
+      return stack.slice(0, -1)
+    })
+  }, [])
+
+  const handleRedoSectionFlow = useCallback(() => {
+    setSectionFlowRedo((stack) => {
+      if (stack.length === 0) {
+        return stack
+      }
+      const cmd = stack[stack.length - 1]!
+      setSectionFlowUndo((undo) => [...undo, cmd])
+      persistPages(setCoreSectionFlowPosition(pagesRef.current, cmd.pageId, cmd.sectionId, cmd.to))
+      return stack.slice(0, -1)
+    })
+  }, [])
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      const target = event.target
+      if (
+        target instanceof HTMLElement &&
+        (target.isContentEditable ||
+          target.tagName === 'INPUT' ||
+          target.tagName === 'TEXTAREA' ||
+          target.tagName === 'SELECT')
+      ) {
+        return
+      }
+      const mod = event.metaKey || event.ctrlKey
+      if (!mod) {
+        return
+      }
+      if (event.key === 'z' && !event.shiftKey) {
+        event.preventDefault()
+        handleUndoSectionFlow()
+        return
+      }
+      if (event.key === 'y' || (event.key === 'z' && event.shiftKey)) {
+        event.preventDefault()
+        handleRedoSectionFlow()
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [handleRedoSectionFlow, handleUndoSectionFlow])
 
   const handleAddPage = (pageType: PageType) => {
     const page = createBlankPage(pageType, pages.length)
@@ -303,6 +364,7 @@ function App() {
   }
 
   const handleReset = () => {
+    clearSectionFlowHistory()
     pages.forEach((page) => {
       deletePage(page.id)
     })
@@ -864,6 +926,10 @@ function App() {
                 frontCover={frontCover}
                 backCover={backCover}
                 onCoreSectionReposition={handleCoreSectionReposition}
+                onUndoSectionFlow={handleUndoSectionFlow}
+                onRedoSectionFlow={handleRedoSectionFlow}
+                canUndoSectionFlow={sectionFlowUndo.length > 0}
+                canRedoSectionFlow={sectionFlowRedo.length > 0}
               />
           </div>
 
@@ -901,6 +967,10 @@ function App() {
                 frontCover={frontCover}
                 backCover={backCover}
                 onCoreSectionReposition={handleCoreSectionReposition}
+                onUndoSectionFlow={handleUndoSectionFlow}
+                onRedoSectionFlow={handleRedoSectionFlow}
+                canUndoSectionFlow={sectionFlowUndo.length > 0}
+                canRedoSectionFlow={sectionFlowRedo.length > 0}
               />
           </div>
           <div className={mobileTab === 'editor' ? 'block h-full' : 'hidden'}>

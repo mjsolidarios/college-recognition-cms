@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronRight, Minus, Plus } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Minus, Plus, Redo2, Undo2 } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 
 import { Button } from '@/components/ui/button'
@@ -11,6 +11,13 @@ import { PAGE_HEIGHT, PAGE_WIDTH, type RenderedPage } from '@/types/cms'
 const RULER_SIZE = 24
 const RULER_FONT = `7.5px 'JetBrains Mono', 'Fira Code', monospace`
 const PAGE_CENTER_X = PAGE_WIDTH / 2
+
+function releasePointerCaptureIfHeld(target: EventTarget | null, pointerId: number) {
+  if (!(target instanceof Element) || !target.hasPointerCapture(pointerId)) {
+    return
+  }
+  target.releasePointerCapture(pointerId)
+}
 
 /** DOM height required to show all precomputed lines for a text block at the current zoom level. */
 function getBlockPreviewHeight(block: RenderedPage['blocks'][number], zoom: number) {
@@ -207,6 +214,10 @@ export function CanvasPreview({
   frontCover,
   backCover,
   onCoreSectionReposition,
+  onUndoSectionFlow,
+  onRedoSectionFlow,
+  canUndoSectionFlow = false,
+  canRedoSectionFlow = false,
 }: {
   renderedPages: RenderedPage[]
   previewPageIndex: number
@@ -214,6 +225,10 @@ export function CanvasPreview({
   frontCover?: string | null
   backCover?: string | null
   onCoreSectionReposition?: (pageId: string, sectionId: string, flowPosition: number) => void
+  onUndoSectionFlow?: () => void
+  onRedoSectionFlow?: () => void
+  canUndoSectionFlow?: boolean
+  canRedoSectionFlow?: boolean
 }) {
   const [zoom, setZoom] = useState(0.85)
   const [pan, setPan] = useState({ x: 100, y: 50 })
@@ -241,6 +256,7 @@ export function CanvasPreview({
 
   const containerRef = useRef<HTMLDivElement>(null)
   const lastPointerRef = useRef<{ x: number; y: number } | null>(null)
+  const sectionCaptureRef = useRef<HTMLElement | null>(null)
 
   const safeIdx = Math.min(previewPageIndex, Math.max(0, totalSlots - 1))
   const currentSlot = displaySlots[safeIdx]
@@ -368,9 +384,7 @@ export function CanvasPreview({
   const handlePointerUp = (e: React.PointerEvent) => {
     setIsDragging(false)
     lastPointerRef.current = null
-    if (e.currentTarget.hasPointerCapture(e.pointerId)) {
-      e.currentTarget.releasePointerCapture(e.pointerId)
-    }
+    releasePointerCaptureIfHeld(e.currentTarget ?? containerRef.current, e.pointerId)
   }
 
   const handleSectionPointerDown = (
@@ -386,6 +400,7 @@ export function CanvasPreview({
     }
     e.preventDefault()
     e.stopPropagation()
+    sectionCaptureRef.current = e.currentTarget
     e.currentTarget.setPointerCapture(e.pointerId)
     setSectionDrag({
       pageId: currentSlot.page.sourcePageId,
@@ -414,12 +429,13 @@ export function CanvasPreview({
   }
 
   const handleSectionPointerUp = (e: React.PointerEvent<HTMLButtonElement>) => {
+    const pointerId = e.pointerId
+    releasePointerCaptureIfHeld(sectionCaptureRef.current, pointerId)
+    sectionCaptureRef.current = null
+
     setSectionDrag((prev) => {
-      if (!prev || prev.pointerId !== e.pointerId) {
+      if (!prev || prev.pointerId !== pointerId) {
         return prev
-      }
-      if (e.currentTarget.hasPointerCapture(e.pointerId)) {
-        e.currentTarget.releasePointerCapture(e.pointerId)
       }
       onCoreSectionReposition?.(prev.pageId, prev.sectionId, prev.flow)
       return null
@@ -449,6 +465,33 @@ export function CanvasPreview({
             })()}
           </p>
         </div>
+
+        {onCoreSectionReposition && (
+          <div className="flex shrink-0 items-center gap-0.5 border-r border-[var(--color-hairline-soft)] pr-1.5">
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="size-7 text-[var(--color-ink)]"
+              disabled={!canUndoSectionFlow}
+              onClick={onUndoSectionFlow}
+              title="Undo section move (Ctrl+Z)"
+            >
+              <Undo2 className="size-3.5 shrink-0" />
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="size-7 text-[var(--color-ink)]"
+              disabled={!canRedoSectionFlow}
+              onClick={onRedoSectionFlow}
+              title="Redo section move (Ctrl+Y)"
+            >
+              <Redo2 className="size-3.5 shrink-0" />
+            </Button>
+          </div>
+        )}
 
         {/* Zoom Controls */}
         <div className="flex shrink-0 items-center gap-1">
