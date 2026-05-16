@@ -192,7 +192,8 @@ function SliderSetting({
 const MIN_EDITOR_WIDTH = 280
 const MAX_EDITOR_WIDTH = 560
 const DEFAULT_EDITOR_WIDTH = 360
-const waitForNextPaint = () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+const waitForNextPaint = () =>
+  new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())))
 
 function App() {
   const [pages, setPages] = useState<CmsPage[]>(() => getPages())
