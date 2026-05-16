@@ -226,6 +226,7 @@ function App() {
   const dragRef = useRef<{ startX: number; startWidth: number } | null>(null)
 
   const [previewPageIndex, setPreviewPageIndex] = useState(0)
+  const [coverUploadError, setCoverUploadError] = useState<string | null>(null)
 
   const activePage = useMemo(
     () => pages.find((page) => page.id === activePageId) ?? pages[0],
@@ -394,6 +395,7 @@ function App() {
     })
 
   const handleCoverUpload = async (which: 'front' | 'back', file: File) => {
+    setCoverUploadError(null)
     try {
       const dataUrl = await loadCoverFile(file)
       if (which === 'front') {
@@ -404,7 +406,7 @@ function App() {
         setBackCover(dataUrl)
       }
     } catch {
-      // ignore load errors silently
+      setCoverUploadError('Failed to load the image. Please try a different file.')
     }
   }
 
@@ -616,6 +618,9 @@ function App() {
               <p className="text-[11px] leading-snug text-[var(--color-muted)]">
                 Upload a front and/or back cover image (PNG, JPG, or SVG). Covers are scaled to fit the page and included in PDF and SVG exports.
               </p>
+              {coverUploadError && (
+                <p className="text-[11px] font-medium text-red-600">{coverUploadError}</p>
+              )}
               {/* Front cover */}
               <div className="space-y-1.5">
                 <label className="text-xs font-medium text-[var(--color-body)]">Front cover</label>
@@ -635,7 +640,7 @@ function App() {
                   <button
                     type="button"
                     onClick={() => coverFileRef.current.front?.click()}
-                    className="flex w-full items-center justify-center gap-2 rounded-lg border-2 border-dashed border-[var(--color-hairline-strong)] px-4 py-4 text-xs font-medium text-[var(--color-muted)] transition-colors hover:border-[var(--color-primary)] hover:bg-[color:color-mix(in_srgb,var(--color-primary)_8%,white)] hover:text-[var(--color-primary)] cursor-pointer"
+                    className="cover-upload-btn"
                   >
                     <FileImage className="size-4" />Upload front cover
                   </button>
@@ -667,7 +672,7 @@ function App() {
                   <button
                     type="button"
                     onClick={() => coverFileRef.current.back?.click()}
-                    className="flex w-full items-center justify-center gap-2 rounded-lg border-2 border-dashed border-[var(--color-hairline-strong)] px-4 py-4 text-xs font-medium text-[var(--color-muted)] transition-colors hover:border-[var(--color-primary)] hover:bg-[color:color-mix(in_srgb,var(--color-primary)_8%,white)] hover:text-[var(--color-primary)] cursor-pointer"
+                    className="cover-upload-btn"
                   >
                     <FileImage className="size-4" />Upload back cover
                   </button>

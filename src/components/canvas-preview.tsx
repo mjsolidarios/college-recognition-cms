@@ -294,7 +294,12 @@ export function CanvasPreview({
         <div className="min-w-0 flex-1">
           <h2 className="text-sm font-semibold text-[var(--color-ink)]">Canvas Preview</h2>
           <p className="truncate text-xs text-[var(--color-muted)]">
-            {PAGE_WIDTH} × {PAGE_HEIGHT} · {renderedPages.length} rendered page{renderedPages.length !== 1 ? 's' : ''}{(frontCover || backCover) ? ` + ${(frontCover ? 1 : 0) + (backCover ? 1 : 0)} cover${(frontCover && backCover) ? 's' : ''}` : ''}
+            {(() => {
+              const coverCount = (frontCover ? 1 : 0) + (backCover ? 1 : 0)
+              const pageLabel = `${renderedPages.length} rendered page${renderedPages.length !== 1 ? 's' : ''}`
+              const coverLabel = coverCount > 0 ? ` + ${coverCount} cover${coverCount > 1 ? 's' : ''}` : ''
+              return `${PAGE_WIDTH} × ${PAGE_HEIGHT} · ${pageLabel}${coverLabel}`
+            })()}
           </p>
         </div>
 

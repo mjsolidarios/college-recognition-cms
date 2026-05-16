@@ -60,7 +60,6 @@ export async function exportPdfDocument(
 
 export function exportSvgDocument(pages: RenderedPage[], title: string, frontCover?: string | null, backCover?: string | null) {
   const spacing = 24
-  const coverHeight = PAGE_HEIGHT
 
   type SvgSlot = { kind: 'cover'; dataUrl: string } | { kind: 'page'; page: RenderedPage }
   const slots: SvgSlot[] = []
@@ -68,14 +67,29 @@ export function exportSvgDocument(pages: RenderedPage[], title: string, frontCov
   for (const page of pages) slots.push({ kind: 'page', page })
   if (backCover) slots.push({ kind: 'cover', dataUrl: backCover })
 
-  const totalHeight = slots.length * coverHeight + Math.max(0, slots.length - 1) * spacing
+  const totalHeight = slots.length * PAGE_HEIGHT + Math.max(0, slots.length - 1) * spacing
+
+  const renderCoverSlot = (dataUrl: string, pageOffset: number) =>
+    [
+      `<g transform="translate(0 ${pageOffset})">`,
+      `<rect width="${PAGE_WIDTH}" height="${PAGE_HEIGHT}" fill="#ffffff"/>`,
+      `<image href="${dataUrl}" x="0" y="0" width="${PAGE_WIDTH}" height="${PAGE_HEIGHT}" preserveAspectRatio="xMidYMid meet"/>`,
+      `</g>`,
+    ].join('')
+
+  const renderPageSlot = (page: RenderedPage, pageOffset: number) =>
+    [
+      `<g transform="translate(0 ${pageOffset})">`,
+      `<rect width="${PAGE_WIDTH}" height="${PAGE_HEIGHT}" fill="#ffffff"/>`,
+      ...page.blocks.map((block) => renderSvgBlock(block)),
+      `</g>`,
+    ].join('')
 
   const renderSlot = (slot: SvgSlot, index: number) => {
-    const pageOffset = index * (coverHeight + spacing)
-    if (slot.kind === 'cover') {
-      return `<g transform="translate(0 ${pageOffset})"><rect width="${PAGE_WIDTH}" height="${coverHeight}" fill="#ffffff"/><image href="${slot.dataUrl}" x="0" y="0" width="${PAGE_WIDTH}" height="${coverHeight}" preserveAspectRatio="xMidYMid meet"/></g>`
-    }
-    return `<g transform="translate(0 ${pageOffset})"><rect width="${PAGE_WIDTH}" height="${PAGE_HEIGHT}" fill="#ffffff"/>${slot.page.blocks.map((block) => renderSvgBlock(block)).join('')}</g>`
+    const pageOffset = index * (PAGE_HEIGHT + spacing)
+    return slot.kind === 'cover'
+      ? renderCoverSlot(slot.dataUrl, pageOffset)
+      : renderPageSlot(slot.page, pageOffset)
   }
 
   const markup = `<?xml version="1.0" encoding="UTF-8"?>
