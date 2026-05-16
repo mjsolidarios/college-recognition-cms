@@ -1,4 +1,4 @@
-import { BookOpen, ChevronDown, Download, FileImage, FileText, GripVertical, LayoutGrid, Pencil, RefreshCw } from 'lucide-react'
+import { BookOpen, ChevronDown, Download, FileImage, FileText, GripVertical, LayoutGrid, Pencil, RefreshCw, RotateCcw } from 'lucide-react'
 import { useCallback, useMemo, useRef, useState } from 'react'
 
 import { CanvasPreview } from '@/components/canvas-preview'
@@ -248,6 +248,11 @@ function App() {
     setSettings(saveSettings(nextSettings))
   }
 
+  const handleResetSettings = () => {
+    const next = { ...defaultSettings }
+    setSettings(saveSettings(next))
+  }
+
   const handleReset = () => {
     pages.forEach((page) => {
       deletePage(page.id)
@@ -334,6 +339,22 @@ function App() {
       <TabsContent value="settings" className="min-h-0 flex-1">
         <ScrollArea className="h-[calc(100vh-14rem)] xl:h-[calc(100vh-11rem)]">
           <div className="space-y-3 pb-2">
+            <div className="flex flex-col gap-2 rounded-lg border border-[var(--color-hairline)] bg-[var(--surface-canvas)] px-3 py-2.5">
+              <p className="text-[11px] leading-snug text-[var(--color-muted)]">
+                Restore typography, layout, and display options to their defaults. Pages and document title are unchanged.
+              </p>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-9 w-fit border-[var(--color-hairline)] bg-white text-xs text-[var(--color-body)] hover:bg-white hover:text-[var(--color-ink)]"
+                onClick={handleResetSettings}
+              >
+                <RotateCcw className="mr-1.5 size-3.5" />
+                Reset settings
+              </Button>
+            </div>
+
             {/* Document */}
             <SettingsGroup title="Document">
               <div className="space-y-1.5">
