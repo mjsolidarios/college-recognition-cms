@@ -159,6 +159,37 @@ function migrateStripTrailingDeanFromTitleSection(pages: CmsPage[]): { pages: Cm
   return { pages: next, changed }
 }
 
+function migrateCoreSectionFlowPosition(pages: CmsPage[]): { pages: CmsPage[]; changed: boolean } {
+  let changed = false
+  const next = pages.map((page) => {
+    if (page.type !== 'core') {
+      return page
+    }
+    let sectionChanged = false
+    const sections = page.content.sections.map((section) => {
+      if (section.flowPosition === undefined) {
+        return section
+      }
+      if (typeof section.flowPosition === 'number' && Number.isFinite(section.flowPosition) && section.flowPosition >= 0) {
+        const rounded = Math.round(section.flowPosition)
+        if (rounded === section.flowPosition) {
+          return section
+        }
+        sectionChanged = true
+        return { ...section, flowPosition: rounded }
+      }
+      sectionChanged = true
+      return { id: section.id, title: section.title, body: section.body }
+    })
+    if (!sectionChanged) {
+      return page
+    }
+    changed = true
+    return { ...page, content: { ...page.content, sections } }
+  })
+  return { pages: next, changed }
+}
+
 export function getPages(): CmsPage[] {
   // TODO: replace with Supabase.
   const pages = readJson<CmsPage[]>(PAGES_KEY, seedPages)
@@ -172,6 +203,10 @@ export function getPages(): CmsPage[] {
   const stripDeanResult = migrateStripTrailingDeanFromTitleSection(effective)
   effective = stripDeanResult.pages
   anyChanged ||= stripDeanResult.changed
+
+  const flowPositionResult = migrateCoreSectionFlowPosition(effective)
+  effective = flowPositionResult.pages
+  anyChanged ||= flowPositionResult.changed
 
   if (anyChanged && canUseStorage()) {
     writeJson(PAGES_KEY, effective)

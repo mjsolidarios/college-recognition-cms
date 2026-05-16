@@ -31,6 +31,8 @@ export interface CoreSection {
   id: string
   title: string
   body: string
+  /** Flow-space anchor position in px (column-aware: overflows continue to next column/page). */
+  flowPosition?: number
 }
 
 export interface BasePage {
@@ -108,12 +110,16 @@ export interface RenderTextBlock {
   align: 'left' | 'center' | 'right'
   uppercase?: boolean
   letterSpacing?: number
+  sectionId?: string
 }
 
 export interface RenderedPage {
   id: string
   sourcePageId: string
   sourcePageType: PageType
+  sourcePageLocalIndex: number
   pageNumber: number
+  contentTop: number
+  maxContentY: number
   blocks: RenderTextBlock[]
 }

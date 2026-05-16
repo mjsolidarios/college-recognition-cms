@@ -234,7 +234,8 @@ function App() {
   )
 
   const renderedPages = useMemo(() => renderDocument(pages, settings), [pages, settings])
-  const safePreviewPageIndex = Math.min(previewPageIndex, Math.max(0, renderedPages.length - 1))
+  const previewSlotCount = renderedPages.length + (frontCover ? 1 : 0) + (backCover ? 1 : 0)
+  const safePreviewPageIndex = Math.min(previewPageIndex, Math.max(0, previewSlotCount - 1))
 
   useEffect(() => {
     warmPdfExportWorker()
@@ -252,6 +253,25 @@ function App() {
 
   const handlePageChange = (page: CmsPage) => {
     const nextPages = pages.map((entry) => (entry.id === page.id ? page : entry))
+    persistPages(nextPages)
+  }
+
+  const handleCoreSectionReposition = (pageId: string, sectionId: string, flowPosition: number) => {
+    const snapped = Math.max(0, Math.round(flowPosition))
+    const nextPages = pages.map((page) => {
+      if (page.id !== pageId || page.type !== 'core') {
+        return page
+      }
+      return {
+        ...page,
+        content: {
+          ...page.content,
+          sections: page.content.sections.map((section) =>
+            section.id === sectionId ? { ...section, flowPosition: snapped } : section,
+          ),
+        },
+      }
+    })
     persistPages(nextPages)
   }
 
@@ -842,6 +862,7 @@ function App() {
                 onPreviewPageChange={setPreviewPageIndex}
                 frontCover={frontCover}
                 backCover={backCover}
+                onCoreSectionReposition={handleCoreSectionReposition}
               />
           </div>
 
@@ -878,6 +899,7 @@ function App() {
                 onPreviewPageChange={setPreviewPageIndex}
                 frontCover={frontCover}
                 backCover={backCover}
+                onCoreSectionReposition={handleCoreSectionReposition}
               />
           </div>
           <div className={mobileTab === 'editor' ? 'block h-full' : 'hidden'}>

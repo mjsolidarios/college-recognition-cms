@@ -120,6 +120,11 @@ function validatePageContent(page: Record<string, unknown>, index: number): stri
           errors.push(`Page ${index}, section ${i}: must be an object`)
         } else if (typeof section.title !== 'string' || typeof section.body !== 'string') {
           errors.push(`Page ${index}, section ${i}: requires "title" and "body" strings`)
+        } else if (
+          section.flowPosition !== undefined &&
+          (typeof section.flowPosition !== 'number' || !Number.isFinite(section.flowPosition) || section.flowPosition < 0)
+        ) {
+          errors.push(`Page ${index}, section ${i}: "flowPosition" must be a non-negative number when provided`)
         }
       }
     }
@@ -202,6 +207,10 @@ export function validateBookletImport(raw: unknown): ValidationResult {
     const sections = ((page as { content: { sections: CoreSection[] } }).content.sections).map((section) => ({
       ...section,
       id: section.id || crypto.randomUUID(),
+      flowPosition:
+        typeof section.flowPosition === 'number' && Number.isFinite(section.flowPosition) && section.flowPosition >= 0
+          ? Math.round(section.flowPosition)
+          : undefined,
     }))
     return { ...page, id, order: i, content: { ...page.content, sections } } as CmsPage
   })
