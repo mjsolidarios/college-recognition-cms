@@ -1,10 +1,9 @@
 import { ChevronLeft, ChevronRight, Minus, Plus } from 'lucide-react'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 import { Button } from '@/components/ui/button'
-import { renderDocument } from '@/lib/layout'
 import { cn } from '@/lib/utils'
-import { PAGE_HEIGHT, PAGE_WIDTH, type CmsPage, type CmsSettings } from '@/types/cms'
+import { PAGE_HEIGHT, PAGE_WIDTH, type RenderedPage } from '@/types/cms'
 
 const RULER_SIZE = 24
 const RULER_FONT = `7.5px 'JetBrains Mono', 'Fira Code', monospace`
@@ -158,29 +157,29 @@ function VerticalRuler({ zoom, panY, maxVal }: { zoom: number; panY: number; max
 }
 
 export function CanvasPreview({
-  pages,
-  settings,
+  renderedPages,
+  previewPageIndex,
+  onPreviewPageChange,
 }: {
-  pages: CmsPage[]
-  settings: CmsSettings
+  renderedPages: RenderedPage[]
+  previewPageIndex: number
+  onPreviewPageChange: (index: number) => void
 }) {
   const [zoom, setZoom] = useState(0.85)
   const [pan, setPan] = useState({ x: 100, y: 50 })
   const [isSpaceDown, setIsSpaceDown] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
-  
-  const [currentPageIdx, setCurrentPageIdx] = useState(0)
-  const renderedPages = useMemo(() => renderDocument(pages, settings), [pages, settings])
+
   const pageCount = renderedPages.length
 
   const containerRef = useRef<HTMLDivElement>(null)
   const lastPointerRef = useRef<{ x: number; y: number } | null>(null)
 
-  const safeIdx = Math.min(currentPageIdx, Math.max(0, pageCount - 1))
+  const safeIdx = Math.min(previewPageIndex, Math.max(0, pageCount - 1))
   const currentPage = renderedPages[safeIdx]
 
-  const goToPrev = () => setCurrentPageIdx((i) => Math.max(0, i - 1))
-  const goToNext = () => setCurrentPageIdx((i) => Math.min(pageCount - 1, i + 1))
+  const goToPrev = () => onPreviewPageChange(Math.max(0, safeIdx - 1))
+  const goToNext = () => onPreviewPageChange(Math.min(pageCount - 1, safeIdx + 1))
 
   // Keyboard Spacebar for panning mode
   useEffect(() => {
@@ -274,7 +273,7 @@ export function CanvasPreview({
     <div className="flex h-full min-h-0 flex-col rounded-xl border border-[var(--color-hairline)] bg-white">
       {/* Header */}
       <div className="z-10 flex items-center justify-between gap-2 rounded-t-xl border-b border-[var(--color-hairline-soft)] bg-white px-4 py-2.5">
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <h2 className="text-sm font-semibold text-[var(--color-ink)]">Canvas Preview</h2>
           <p className="truncate text-xs text-[var(--color-muted)]">
             {PAGE_WIDTH} × {PAGE_HEIGHT} · {pageCount} rendered page{pageCount !== 1 ? 's' : ''}
@@ -282,15 +281,15 @@ export function CanvasPreview({
         </div>
 
         {/* Zoom Controls */}
-        <div className="flex items-center gap-1">
+        <div className="flex shrink-0 items-center gap-1">
           <Button
             type="button"
             variant="ghost"
             size="icon"
-            className="size-7"
+            className="size-7 text-[var(--color-ink)]"
             onClick={() => setZoom((z) => Math.max(0.2, +(z - 0.1).toFixed(2)))}
           >
-            <Minus className="size-3.5" />
+            <Minus className="size-3.5 shrink-0" />
           </Button>
           <div className="relative h-1.5 w-16 rounded-full bg-[var(--surface-strong)]">
             <div
@@ -311,10 +310,10 @@ export function CanvasPreview({
             type="button"
             variant="ghost"
             size="icon"
-            className="size-7"
+            className="size-7 text-[var(--color-ink)]"
             onClick={() => setZoom((z) => Math.min(3, +(z + 0.1).toFixed(2)))}
           >
-            <Plus className="size-3.5" />
+            <Plus className="size-3.5 shrink-0" />
           </Button>
           <span className="w-10 text-center font-mono text-[11px] font-medium tabular-nums text-[var(--color-muted)]">
             {Math.round(zoom * 100)}%
@@ -374,13 +373,14 @@ export function CanvasPreview({
                 <div
                   key={block.id}
                   className={cn(
-                    'pointer-events-none absolute whitespace-pre text-[var(--color-ink)]',
+                    'pointer-events-none absolute whitespace-pre-wrap break-words text-[var(--color-ink)]',
                     block.uppercase && 'uppercase'
                   )}
                   style={{
                     left: block.x * zoom,
                     top: block.y * zoom,
                     width: block.width * zoom,
+                    maxWidth: block.width * zoom,
                     fontSize: block.fontSize * zoom,
                     lineHeight: `${block.lineHeight * zoom}px`,
                     fontWeight: block.fontWeight,
@@ -388,6 +388,7 @@ export function CanvasPreview({
                     letterSpacing: `${(block.letterSpacing ?? 0) * zoom}px`,
                     textAlign: block.align,
                     fontFamily: 'Georgia, "Times New Roman", serif',
+                    overflowWrap: 'anywhere',
                   }}
                 >
                   {block.lines.join('\n')}

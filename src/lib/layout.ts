@@ -10,13 +10,18 @@ import type {
 } from '@/types/cms'
 import { PAGE_HEIGHT, PAGE_WIDTH } from '@/types/cms'
 
-const TITLE_GAP = 28
-const SECTION_GAP = 18
-const PARAGRAPH_GAP = 10
-const ITEM_GAP = 3
+/** Space between title block and first body column (tighter to match print brochure). */
+const TITLE_GAP = 16
+/** Tighter gutter under the program page heading — more rows fit above the fold. */
+const TITLE_GAP_PROGRAM = 10
+const SECTION_GAP = 11
+const PARAGRAPH_GAP = 6
+const ITEM_GAP = 2
+/** Pixels inset for faculty name lists under “Permanent Faculty:” / “Part-time Lecturers:”. */
+const CORE_LIST_INDENT = 14
 const FONT_FAMILY = 'Georgia, "Times New Roman", serif'
 /** Shrink wrap width slightly so layout reserves at least as many lines as the canvas / PDF renderer. */
-const WRAP_WIDTH_INSET = 4
+const WRAP_WIDTH_INSET = 10
 
 type LayoutContext = {
   renderedPages: RenderedPage[]
@@ -44,6 +49,8 @@ type TextOptions = {
   letterSpacing?: number
   /** When set, stay in this column; overflow continues on the next page (never the sibling column). Used for program two-column rows. */
   pinColumn?: 0 | 1
+  /** Narrower wrap width + shifted x (document px); used for indented faculty lists on core pages. */
+  indent?: number
 }
 
 let measuringCanvas: HTMLCanvasElement | null = null
@@ -65,7 +72,12 @@ function getPageTitleBlocks(page: CmsPage, settings: CmsSettings, pageNumber: nu
   const scale = getScale(settings)
   const titleWidth = PAGE_WIDTH - settings.pagePaddingX * 2
   const titleFontSize = (page.type === 'program' ? settings.titleSize * 1.95 : settings.titleSize) * scale
-  const titleLineHeight = (page.type === 'program' ? settings.titleSize * 2.2 : settings.titleSize * 1.2) * scale
+  const titleLineHeight =
+    (page.type === 'program'
+      ? settings.titleSize * 2.2
+      : page.type === 'core'
+        ? settings.titleSize * 1.08
+        : settings.titleSize * 1.12) * scale
 
   // Wrap each heading line so the layout engine uses the true rendered line count,
   // preventing subsequent content blocks from overlapping the title.
@@ -97,11 +109,11 @@ function getPageTitleBlocks(page: CmsPage, settings: CmsSettings, pageNumber: nu
       y:
         settings.pagePaddingTop +
         blocks[0].lines.length * titleLineHeight +
-        Math.round(8 * scale),
+        Math.round((page.type === 'core' ? 4 : 8) * scale),
       width: titleWidth,
       lines: [page.content.subheading],
       fontSize: settings.subtitleSize * scale,
-      lineHeight: settings.subtitleSize * 1.25 * scale,
+      lineHeight: settings.subtitleSize * (page.type === 'core' ? 1.12 : 1.25) * scale,
       fontWeight: 'normal',
       fontStyle: 'normal',
       align: 'center',
@@ -136,7 +148,7 @@ function measureWidth(text: string, fontSize: number, fontWeight: 'normal' | 'bo
 
   // Add a small safety margin to account for differences between Canvas text metrics
   // and browser DOM font rendering (kerning, letter-spacing, etc).
-  return context.measureText(text).width * 1.02 + 2
+  return context.measureText(text).width * 1.04 + 2
 }
 
 function wrapParagraph(
@@ -177,12 +189,23 @@ function wrapText(
   fontSize: number,
   fontWeight: 'normal' | 'bold',
 ) {
-  const paragraphs = text.split('\n')
+  const normalized = text.replace(/\r\n/g, '\n').trimEnd()
+  const blocks = normalized
+    .split(/\n\s*\n+/)
+    .map((block) => block.trimEnd())
+    .filter((block) => block.length > 0)
+
   const lines: string[] = []
 
-  paragraphs.forEach((paragraph, index) => {
-    lines.push(...wrapParagraph(paragraph, width, fontSize, fontWeight))
-    if (index < paragraphs.length - 1) {
+  blocks.forEach((block, blockIndex) => {
+    for (const line of block.split('\n')) {
+      const trimmed = line.trim()
+      if (!trimmed) {
+        continue
+      }
+      lines.push(...wrapParagraph(trimmed, width, fontSize, fontWeight))
+    }
+    if (blockIndex < blocks.length - 1) {
       lines.push('')
     }
   })
@@ -211,7 +234,8 @@ function getContentTop(page: CmsPage, settings: CmsSettings) {
     return settings.pagePaddingTop
   }
 
-  return lastBlock.y + lastBlock.lines.length * lastBlock.lineHeight + TITLE_GAP * getScale(settings)
+  const titleGap = page.type === 'program' ? TITLE_GAP_PROGRAM : TITLE_GAP
+  return lastBlock.y + lastBlock.lines.length * lastBlock.lineHeight + titleGap * getScale(settings)
 }
 
 function createLayoutContext(page: CmsPage, settings: CmsSettings, pageNumber: number): LayoutContext {
@@ -253,10 +277,13 @@ function addLinesToFlow(context: LayoutContext, options: TextOptions) {
   const align = options.align ?? 'left'
   const scale = getScale(context.settings)
   const fontSize = options.fontSize * scale
-  const rawWidth = options.fullWidth
+  const full = options.fullWidth === true
+  const inset = full ? 0 : (options.indent ?? 0)
+  const columnTotal = full
     ? PAGE_WIDTH - context.settings.pagePaddingX * 2
     : (options.width ?? context.columnWidth)
-  const wrapWidth = options.fullWidth ? rawWidth : Math.max(8, rawWidth - WRAP_WIDTH_INSET)
+  const rawWidth = Math.max(8, columnTotal - inset)
+  const wrapWidth = full ? rawWidth : Math.max(8, rawWidth - WRAP_WIDTH_INSET)
   const width = rawWidth
   const lines = wrapText(options.text, wrapWidth, fontSize, fontWeight)
   const lineHeight = fontSize * context.settings.lineHeight
@@ -265,8 +292,10 @@ function addLinesToFlow(context: LayoutContext, options: TextOptions) {
 
   const resolveColumn = (): 0 | 1 => (pinned !== undefined ? pinned : context.currentColumn)
 
-  const xFor = (col: 0 | 1) =>
-    options.fullWidth ? context.settings.pagePaddingX : getColumnX(context.settings, col)
+  const xFor = (col: 0 | 1) => {
+    const base = full ? context.settings.pagePaddingX : getColumnX(context.settings, col)
+    return base + inset
+  }
 
   if (pinned !== undefined) {
     context.currentColumn = pinned
@@ -356,24 +385,100 @@ function addLinesToFlow(context: LayoutContext, options: TextOptions) {
   }
 }
 
-function addSectionHeading(context: LayoutContext, text: string, index: number) {
+type SectionHeadingOptions = {
+  uppercase?: boolean
+  /** Document-space px after heading (tighter for short officer blocks). */
+  spacingAfter?: number
+}
+
+function addSectionHeading(
+  context: LayoutContext,
+  text: string,
+  index: number,
+  options?: SectionHeadingOptions,
+) {
   addLinesToFlow(context, {
     idPrefix: `section-heading-${index}`,
     text,
     fontSize: context.settings.headingSize,
     fontWeight: 'bold',
-    spacingAfter: ITEM_GAP,
+    spacingAfter: options?.spacingAfter ?? ITEM_GAP,
     allowSplit: false,
+    uppercase: options?.uppercase === true,
   })
 }
 
+const FACULTY_LIST_LABEL = /^(Permanent Faculty|Part-time Lecturers):\s*$/i
+
+/** Split core body so name lists under faculty headings use a horizontal indent (see print layout). */
+function segmentCoreBodyForLayout(body: string): { text: string; indent: boolean }[] {
+  const raw = body.split('\n')
+  const out: { text: string; indent: boolean }[] = []
+  let buf: string[] = []
+  let indentMode = false
+
+  const flush = (indent: boolean) => {
+    if (!buf.length) {
+      return
+    }
+    out.push({ text: buf.join('\n'), indent })
+    buf = []
+  }
+
+  for (const line of raw) {
+    const trimmed = line.trim()
+    if (FACULTY_LIST_LABEL.test(trimmed)) {
+      if (indentMode) {
+        flush(true)
+      } else {
+        flush(false)
+      }
+      out.push({ text: line, indent: false })
+      indentMode = true
+      continue
+    }
+    if (trimmed === '') {
+      if (indentMode) {
+        flush(true)
+        indentMode = false
+      } else {
+        flush(false)
+      }
+      continue
+    }
+    buf.push(line)
+  }
+  if (indentMode) {
+    flush(true)
+  } else {
+    flush(false)
+  }
+  return out
+}
+
 function renderCoreSection(context: LayoutContext, section: CoreSection, index: number) {
-  addSectionHeading(context, section.title, index)
-  addLinesToFlow(context, {
-    idPrefix: `section-body-${index}`,
-    text: section.body,
-    fontSize: context.settings.bodySize,
-    spacingAfter: SECTION_GAP,
+  const trimmedTitle = section.title.trim()
+  if (trimmedTitle) {
+    const headingUppercase = !/^(Dean|College Secretary)$/i.test(trimmedTitle)
+    const tightOfficerHeading = /^College Secretary$/i.test(trimmedTitle)
+    addSectionHeading(context, section.title, index, {
+      uppercase: headingUppercase,
+      spacingAfter: tightOfficerHeading ? 1 : undefined,
+    })
+  }
+  const segments = segmentCoreBodyForLayout(section.body)
+  segments.forEach((seg, segIndex) => {
+    if (!seg.text.trim()) {
+      return
+    }
+    const isLast = segIndex === segments.length - 1
+    addLinesToFlow(context, {
+      idPrefix: `section-body-${index}-${segIndex}`,
+      text: seg.text,
+      fontSize: context.settings.bodySize,
+      spacingAfter: isLast ? SECTION_GAP : PARAGRAPH_GAP,
+      indent: seg.indent ? CORE_LIST_INDENT : undefined,
+    })
   })
 }
 
@@ -492,6 +597,12 @@ function renderNonAcademicPage(context: LayoutContext, entries: NonAcademicEntry
 }
 
 function renderProgramPage(context: LayoutContext, rows: ProgramRow[]) {
+  /**
+   * Trailing gutter after left/right bodies — ~two body lines (scaled with globalScale later).
+   * Row pairing still uses max(Y) banding so very tall LEFT cells widen RIGHT gaps.
+   */
+  const afterBodySpacing = 2 * context.settings.bodySize * context.settings.lineHeight
+
   rows.forEach((row, index) => {
     const rowTop = Math.max(context.currentY[0], context.currentY[1])
     const rowStartPageIndex = context.currentPageIndex
@@ -503,7 +614,7 @@ function renderProgramPage(context: LayoutContext, rows: ProgramRow[]) {
       text: row.leftTitle,
       fontSize: context.settings.bodySize,
       fontWeight: 'bold',
-      spacingAfter: ITEM_GAP,
+      spacingAfter: 1,
       allowSplit: false,
       pinColumn: 0,
     })
@@ -511,18 +622,19 @@ function renderProgramPage(context: LayoutContext, rows: ProgramRow[]) {
       idPrefix: `program-left-body-${index}`,
       text: row.leftBody,
       fontSize: context.settings.bodySize,
-      spacingAfter: 14,
+      spacingAfter: afterBodySpacing,
       pinColumn: 0,
     })
-    if (context.currentPageIndex === rowStartPageIndex) {
-      context.currentY[1] = rowTop
-    }
+
+    const stillSameRowPage = context.currentPageIndex === rowStartPageIndex
+    context.currentY[1] = stillSameRowPage ? rowTop : context.currentY[1]
+
     addLinesToFlow(context, {
       idPrefix: `program-right-title-${index}`,
       text: row.rightTitle ?? '',
       fontSize: context.settings.bodySize,
       fontWeight: 'bold',
-      spacingAfter: ITEM_GAP,
+      spacingAfter: 1,
       allowSplit: false,
       pinColumn: 1,
     })
@@ -530,7 +642,7 @@ function renderProgramPage(context: LayoutContext, rows: ProgramRow[]) {
       idPrefix: `program-right-body-${index}`,
       text: row.rightBody ?? '',
       fontSize: context.settings.bodySize,
-      spacingAfter: 18,
+      spacingAfter: afterBodySpacing,
       pinColumn: 1,
     })
     context.currentColumn = context.currentY[0] >= context.currentY[1] ? 0 : 1

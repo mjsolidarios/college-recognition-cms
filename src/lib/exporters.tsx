@@ -13,8 +13,9 @@ function escapeXml(value: string) {
     .replaceAll("'", '&apos;')
 }
 
-function renderSvgBlock(pageOffset: number, block: RenderedPage['blocks'][number]) {
-  const blockY = pageOffset + block.y
+/** Coordinates are in the SVG group translated by page offset — do not double-apply vertical offset here. */
+function renderSvgBlock(block: RenderedPage['blocks'][number]) {
+  const blockY = block.y
   const textAnchor = block.align === 'center' ? 'middle' : block.align === 'right' ? 'end' : 'start'
   const x = block.align === 'center' ? block.x + block.width / 2 : block.align === 'right' ? block.x + block.width : block.x
 
@@ -37,10 +38,14 @@ export function exportSvgDocument(pages: RenderedPage[], title: string) {
   ${pages
     .map((page, index) => {
       const pageOffset = index * (PAGE_HEIGHT + spacing)
-      return `<g transform="translate(0 ${pageOffset})"><rect width="${PAGE_WIDTH}" height="${PAGE_HEIGHT}" fill="#ffffff"/>${page.blocks.map((block) => renderSvgBlock(pageOffset, block)).join('')}</g>`
+      return `<g transform="translate(0 ${pageOffset})"><rect width="${PAGE_WIDTH}" height="${PAGE_HEIGHT}" fill="#ffffff"/>${page.blocks.map((block) => renderSvgBlock(block)).join('')}</g>`
     })
     .join('')}
 </svg>`
 
-  downloadFile(new Blob([markup], { type: 'image/svg+xml;charset=utf-8' }), `${slugify(title) || 'college-recognition'}.svg`)
+  const base = slugify(title) || 'college-recognition'
+  const fileName =
+    pages.length === 1 ? `${base}-page-${pages[0]?.pageNumber ?? 1}` : `${base}`
+
+  downloadFile(new Blob([markup], { type: 'image/svg+xml;charset=utf-8' }), `${fileName}.svg`)
 }

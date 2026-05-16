@@ -58,10 +58,21 @@ select {
 }
 
 canvas,
-img,
+img {
+  display: block;
+  max-width: 100%;
+}
+
 svg {
   display: block;
   max-width: 100%;
+}
+
+/* Lucide icons: global max-width:100% shrinks SVGs inside small icon buttons to ~0 width. */
+button svg,
+[role='button'] svg {
+  max-width: none;
+  flex-shrink: 0;
 }
 
 /* ── Custom range slider ─────────────────────────────────── */

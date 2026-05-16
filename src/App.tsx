@@ -1,5 +1,5 @@
 import { BookOpen, ChevronDown, Download, FileImage, FileText, GripVertical, LayoutGrid, Pencil, RefreshCw } from 'lucide-react'
-import { useCallback, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { CanvasPreview } from '@/components/canvas-preview'
 import { ExportDialog, ImportDialog } from '@/components/import-export-dialog'
@@ -203,12 +203,18 @@ function App() {
   const [editorWidth, setEditorWidth] = useState(DEFAULT_EDITOR_WIDTH)
   const dragRef = useRef<{ startX: number; startWidth: number } | null>(null)
 
+  const [previewPageIndex, setPreviewPageIndex] = useState(0)
+
   const activePage = useMemo(
     () => pages.find((page) => page.id === activePageId) ?? pages[0],
     [activePageId, pages],
   )
 
   const renderedPages = useMemo(() => renderDocument(pages, settings), [pages, settings])
+
+  useEffect(() => {
+    setPreviewPageIndex((i) => (renderedPages.length === 0 ? 0 : Math.min(i, renderedPages.length - 1)))
+  }, [renderedPages.length])
 
   const persistPages = (nextPages: CmsPage[]) => {
     const orderedPages = [...nextPages].sort((left, right) => left.order - right.order)
@@ -253,6 +259,7 @@ function App() {
     persistPages(seedPages)
     setSettings(saveSettings(defaultSettings))
     setActivePageId(seedPages[0].id)
+    setPreviewPageIndex(0)
   }
 
   const handleExportPdf = async () => {
@@ -265,7 +272,13 @@ function App() {
   }
 
   const handleExportSvg = () => {
-    exportSvgDocument(renderedPages, documentTitle)
+    const maxIdx = Math.max(0, renderedPages.length - 1)
+    const idx = Math.min(Math.max(0, previewPageIndex), maxIdx)
+    const page = renderedPages[idx]
+    if (!page) {
+      return
+    }
+    exportSvgDocument([page], documentTitle)
   }
 
   const handleImport = (importedPages: CmsPage[], importedSettings?: CmsSettings, importedTitle?: string) => {
@@ -279,6 +292,7 @@ function App() {
       setDocumentTitle(importedTitle)
     }
     setActivePageId(importedPages[0]?.id ?? '')
+    setPreviewPageIndex(0)
   }
 
   /* ── Resize drag handle ─────────────────────────────────── */
@@ -574,7 +588,11 @@ function App() {
 
           {/* Canvas */}
           <div className="min-w-0 flex-1">
-            <CanvasPreview pages={pages} settings={settings} />
+            <CanvasPreview
+              renderedPages={renderedPages}
+              previewPageIndex={previewPageIndex}
+              onPreviewPageChange={setPreviewPageIndex}
+            />
           </div>
 
           {/* Resize handle */}
@@ -605,7 +623,11 @@ function App() {
             />
           </div>
           <div className={mobileTab === 'canvas' ? 'block h-full' : 'hidden'}>
-            <CanvasPreview pages={pages} settings={settings} />
+            <CanvasPreview
+              renderedPages={renderedPages}
+              previewPageIndex={previewPageIndex}
+              onPreviewPageChange={setPreviewPageIndex}
+            />
           </div>
           <div className={mobileTab === 'editor' ? 'block h-full' : 'hidden'}>
             {EditorSettingsPanel}

@@ -8,11 +8,11 @@ export const defaultSettings: CmsSettings = {
   bodySize: 11.5,
   metaSize: 10.75,
   pageNumberSize: 10,
-  pagePaddingTop: 44,
-  pagePaddingBottom: 34,
-  pagePaddingX: 48,
-  columnGap: 24,
-  lineHeight: 1.38,
+  pagePaddingTop: 36,
+  pagePaddingBottom: 30,
+  pagePaddingX: 40,
+  columnGap: 14,
+  lineHeight: 1.1,
   showPageNumbers: true,
   documentYear: (() => {
     const now = new Date()
@@ -36,7 +36,12 @@ export const seedPages: CmsPage[] = [
         {
           id: 'core-officials-dean',
           title: 'Dean',
-          body: 'Dr. Ma. Beth S. Concepcion\nDean\n\nMr. Neiljan C. Raborar\nCollege Secretary',
+          body: 'Dr. Ma. Beth S. Concepcion',
+        },
+        {
+          id: 'core-officials-secretary',
+          title: 'College Secretary',
+          body: 'Mr. Neiljan C. Raborar',
         },
         {
           id: 'core-officials-is',
@@ -72,7 +77,8 @@ export const seedPages: CmsPage[] = [
         {
           id: 'program-1',
           leftTitle: 'Processional',
-          leftBody: 'Student Awardees & Parents\nFaculty & Staff\nDean\nUniversity Officials\nGuest Speaker',
+          leftBody:
+            'Student Awardees & Parents • Faculty & Staff • Dean • University Officials • Guest Speaker',
           rightTitle: 'Awarding of Plaque of Appreciation to the Guest Speaker',
           rightBody: 'Dr. Ma. Beth S. Concepcion\nDean, CICT',
         },
