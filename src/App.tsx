@@ -230,6 +230,7 @@ function App() {
   )
 
   const renderedPages = useMemo(() => renderDocument(pages, settings), [pages, settings])
+  const safePreviewPageIndex = Math.min(previewPageIndex, Math.max(0, renderedPages.length - 1))
 
   useEffect(() => {
     warmPdfExportWorker()
@@ -305,9 +306,7 @@ function App() {
   }
 
   const handleExportSvg = () => {
-    const maxIdx = Math.max(0, renderedPages.length - 1)
-    const idx = Math.min(Math.max(0, previewPageIndex), maxIdx)
-    const page = renderedPages[idx]
+    const page = renderedPages[safePreviewPageIndex]
     if (!page) {
       return
     }
@@ -698,11 +697,11 @@ function App() {
 
           {/* Canvas */}
           <div className="min-w-0 flex-1">
-            <CanvasPreview
-              renderedPages={renderedPages}
-              previewPageIndex={previewPageIndex}
-              onPreviewPageChange={setPreviewPageIndex}
-            />
+              <CanvasPreview
+                renderedPages={renderedPages}
+                previewPageIndex={safePreviewPageIndex}
+                onPreviewPageChange={setPreviewPageIndex}
+              />
           </div>
 
           {/* Resize handle */}
@@ -733,11 +732,11 @@ function App() {
             />
           </div>
           <div className={mobileTab === 'canvas' ? 'block h-full' : 'hidden'}>
-            <CanvasPreview
-              renderedPages={renderedPages}
-              previewPageIndex={previewPageIndex}
-              onPreviewPageChange={setPreviewPageIndex}
-            />
+              <CanvasPreview
+                renderedPages={renderedPages}
+                previewPageIndex={safePreviewPageIndex}
+                onPreviewPageChange={setPreviewPageIndex}
+              />
           </div>
           <div className={mobileTab === 'editor' ? 'block h-full' : 'hidden'}>
             {EditorSettingsPanel}
