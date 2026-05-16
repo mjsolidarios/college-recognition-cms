@@ -15,6 +15,8 @@ const SECTION_GAP = 18
 const PARAGRAPH_GAP = 10
 const ITEM_GAP = 3
 const FONT_FAMILY = 'Georgia, "Times New Roman", serif'
+/** Shrink wrap width slightly so layout reserves at least as many lines as the canvas / PDF renderer. */
+const WRAP_WIDTH_INSET = 4
 
 type LayoutContext = {
   renderedPages: RenderedPage[]
@@ -40,6 +42,8 @@ type TextOptions = {
   allowSplit?: boolean
   spacingAfter?: number
   letterSpacing?: number
+  /** When set, stay in this column; overflow continues on the next page (never the sibling column). Used for program two-column rows. */
+  pinColumn?: 0 | 1
 }
 
 let measuringCanvas: HTMLCanvasElement | null = null
@@ -225,12 +229,7 @@ function createLayoutContext(page: CmsPage, settings: CmsSettings, pageNumber: n
   }
 }
 
-function advanceFlow(context: LayoutContext) {
-  if (context.currentColumn === 0) {
-    context.currentColumn = 1
-    return
-  }
-
+function advanceToNextPage(context: LayoutContext) {
   const nextPageNumber = context.renderedPages.at(-1)!.pageNumber + 1
   context.renderedPages.push(createRenderedPage(context.logicalPage, context.settings, nextPageNumber))
   context.currentPageIndex += 1
@@ -239,36 +238,70 @@ function advanceFlow(context: LayoutContext) {
   context.currentY = [contentTop, contentTop]
 }
 
+function advanceFlow(context: LayoutContext) {
+  if (context.currentColumn === 0) {
+    context.currentColumn = 1
+    return
+  }
+
+  advanceToNextPage(context)
+}
+
 function addLinesToFlow(context: LayoutContext, options: TextOptions) {
   const fontWeight = options.fontWeight ?? 'normal'
   const fontStyle = options.fontStyle ?? 'normal'
   const align = options.align ?? 'left'
   const scale = getScale(context.settings)
   const fontSize = options.fontSize * scale
-  const width = options.fullWidth
+  const rawWidth = options.fullWidth
     ? PAGE_WIDTH - context.settings.pagePaddingX * 2
     : (options.width ?? context.columnWidth)
-  const lines = wrapText(options.text, width, fontSize, fontWeight)
+  const wrapWidth = options.fullWidth ? rawWidth : Math.max(8, rawWidth - WRAP_WIDTH_INSET)
+  const width = rawWidth
+  const lines = wrapText(options.text, wrapWidth, fontSize, fontWeight)
   const lineHeight = fontSize * context.settings.lineHeight
   const blockSpacing = (options.spacingAfter ?? PARAGRAPH_GAP) * scale
-  const x = options.fullWidth
-    ? context.settings.pagePaddingX
-    : getColumnX(context.settings, context.currentColumn)
+  const pinned = options.pinColumn
+
+  const resolveColumn = (): 0 | 1 => (pinned !== undefined ? pinned : context.currentColumn)
+
+  const xFor = (col: 0 | 1) =>
+    options.fullWidth ? context.settings.pagePaddingX : getColumnX(context.settings, col)
+
+  if (pinned !== undefined) {
+    context.currentColumn = pinned
+  }
 
   if (!lines.length) {
     return
   }
 
+  const advanceWhenFull = () => {
+    if (pinned !== undefined) {
+      advanceToNextPage(context)
+      context.currentColumn = pinned
+      return
+    }
+    advanceFlow(context)
+  }
+
   if (options.allowSplit === false) {
     const height = lines.length * lineHeight
-    if (context.currentY[context.currentColumn] + height > context.maxContentY) {
-      advanceFlow(context)
+    let guard = 0
+    while (guard < 48) {
+      const col = resolveColumn()
+      if (context.currentY[col] + height <= context.maxContentY) {
+        break
+      }
+      advanceWhenFull()
+      guard += 1
     }
 
+    const col = resolveColumn()
     context.renderedPages[context.currentPageIndex].blocks.push({
-      id: `${options.idPrefix}-${context.currentPageIndex}-${context.currentColumn}`,
-      x,
-      y: context.currentY[context.currentColumn],
+      id: `${options.idPrefix}-${context.currentPageIndex}-${col}`,
+      x: xFor(col),
+      y: context.currentY[col],
       width,
       lines,
       fontSize,
@@ -279,7 +312,7 @@ function addLinesToFlow(context: LayoutContext, options: TextOptions) {
       uppercase: options.uppercase,
       letterSpacing: options.letterSpacing,
     })
-    context.currentY[context.currentColumn] += height + blockSpacing
+    context.currentY[col] += height + blockSpacing
     return
   }
 
@@ -287,20 +320,21 @@ function addLinesToFlow(context: LayoutContext, options: TextOptions) {
   let blockIndex = 0
 
   while (remainingLines.length > 0) {
-    const availableHeight = context.maxContentY - context.currentY[context.currentColumn]
+    const col = resolveColumn()
+    const availableHeight = context.maxContentY - context.currentY[col]
     const availableLines = Math.floor(availableHeight / lineHeight)
 
     if (availableLines <= 0) {
-      advanceFlow(context)
+      advanceWhenFull()
       continue
     }
 
     const visibleLines = remainingLines.slice(0, availableLines)
 
     context.renderedPages[context.currentPageIndex].blocks.push({
-      id: `${options.idPrefix}-${context.currentPageIndex}-${context.currentColumn}-${blockIndex}`,
-      x,
-      y: context.currentY[context.currentColumn],
+      id: `${options.idPrefix}-${context.currentPageIndex}-${col}-${blockIndex}`,
+      x: xFor(col),
+      y: context.currentY[col],
       width,
       lines: visibleLines,
       fontSize,
@@ -312,12 +346,12 @@ function addLinesToFlow(context: LayoutContext, options: TextOptions) {
       letterSpacing: options.letterSpacing,
     })
 
-    context.currentY[context.currentColumn] += visibleLines.length * lineHeight + blockSpacing
+    context.currentY[col] += visibleLines.length * lineHeight + blockSpacing
     remainingLines = remainingLines.slice(visibleLines.length)
     blockIndex += 1
 
     if (remainingLines.length > 0) {
-      advanceFlow(context)
+      advanceWhenFull()
     }
   }
 }
@@ -459,6 +493,11 @@ function renderNonAcademicPage(context: LayoutContext, entries: NonAcademicEntry
 
 function renderProgramPage(context: LayoutContext, rows: ProgramRow[]) {
   rows.forEach((row, index) => {
+    const rowTop = Math.max(context.currentY[0], context.currentY[1])
+    const rowStartPageIndex = context.currentPageIndex
+    context.currentY[0] = rowTop
+    context.currentY[1] = rowTop
+
     addLinesToFlow(context, {
       idPrefix: `program-left-title-${index}`,
       text: row.leftTitle,
@@ -466,13 +505,18 @@ function renderProgramPage(context: LayoutContext, rows: ProgramRow[]) {
       fontWeight: 'bold',
       spacingAfter: ITEM_GAP,
       allowSplit: false,
+      pinColumn: 0,
     })
     addLinesToFlow(context, {
       idPrefix: `program-left-body-${index}`,
       text: row.leftBody,
       fontSize: context.settings.bodySize,
       spacingAfter: 14,
+      pinColumn: 0,
     })
+    if (context.currentPageIndex === rowStartPageIndex) {
+      context.currentY[1] = rowTop
+    }
     addLinesToFlow(context, {
       idPrefix: `program-right-title-${index}`,
       text: row.rightTitle ?? '',
@@ -480,13 +524,16 @@ function renderProgramPage(context: LayoutContext, rows: ProgramRow[]) {
       fontWeight: 'bold',
       spacingAfter: ITEM_GAP,
       allowSplit: false,
+      pinColumn: 1,
     })
     addLinesToFlow(context, {
       idPrefix: `program-right-body-${index}`,
       text: row.rightBody ?? '',
       fontSize: context.settings.bodySize,
       spacingAfter: 18,
+      pinColumn: 1,
     })
+    context.currentColumn = context.currentY[0] >= context.currentY[1] ? 0 : 1
   })
 }
 
