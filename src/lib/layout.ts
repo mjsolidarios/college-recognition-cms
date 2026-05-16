@@ -19,6 +19,8 @@ const PARAGRAPH_GAP = 6
 const ITEM_GAP = 2
 /** Pixels inset for faculty name lists under “Permanent Faculty:” / “Part-time Lecturers:”. */
 const CORE_LIST_INDENT = 14
+/** Indent used for awardee name lists so wrapped continuations stay visually nested under each award heading. */
+const AWARDEE_LIST_INDENT = 12
 const FONT_FAMILY = 'Georgia, "Times New Roman", serif'
 /** Shrink wrap width slightly so layout reserves at least as many lines as the canvas / PDF renderer. */
 const WRAP_WIDTH_INSET = 10
@@ -97,6 +99,9 @@ function getColumnX(settings: CmsSettings, column: 0 | 1) {
 }
 
 function transformLineForRender(text: string, uppercase?: boolean) {
+  if (!text) {
+    return text
+  }
   return uppercase ? text.toUpperCase() : text
 }
 
@@ -722,7 +727,7 @@ function renderAcademicPage(context: LayoutContext, entries: AcademicEntry[]) {
           text: names.join('\n'),
           fontSize: context.settings.bodySize,
           spacingAfter: 10,
-          indent: 12,
+          indent: AWARDEE_LIST_INDENT,
           minFragmentLines: 2,
         })
         awardIndex += 1
@@ -847,17 +852,17 @@ function renderProgramPage(context: LayoutContext, rows: ProgramRow[]) {
       1,
       true,
     )
-    let rowTop = Math.max(context.currentY[0], context.currentY[1])
+    let currentRowTop = Math.max(context.currentY[0], context.currentY[1])
     const minimumRowHeight = Math.max(leftTitleReserve + leftBodyReserve, rightTitleReserve + rightBodyReserve)
 
-    if (rowTop > context.contentTop && context.maxContentY - rowTop < minimumRowHeight) {
+    if (currentRowTop > context.contentTop && context.maxContentY - currentRowTop < minimumRowHeight) {
       advanceToNextPage(context)
-      rowTop = context.contentTop
+      currentRowTop = context.contentTop
     }
 
     const rowStartPageIndex = context.currentPageIndex
-    context.currentY[0] = rowTop
-    context.currentY[1] = rowTop
+    context.currentY[0] = currentRowTop
+    context.currentY[1] = currentRowTop
 
     addLinesToFlow(context, {
       idPrefix: `program-left-title-${index}`,
@@ -879,7 +884,7 @@ function renderProgramPage(context: LayoutContext, rows: ProgramRow[]) {
     })
 
     const stillSameRowPage = context.currentPageIndex === rowStartPageIndex
-    context.currentY[1] = stillSameRowPage ? rowTop : context.currentY[1]
+    context.currentY[1] = stillSameRowPage ? currentRowTop : context.currentY[1]
 
     addLinesToFlow(context, {
       idPrefix: `program-right-title-${index}`,

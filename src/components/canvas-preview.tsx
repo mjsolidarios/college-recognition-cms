@@ -9,6 +9,10 @@ import { PAGE_HEIGHT, PAGE_WIDTH, type RenderedPage } from '@/types/cms'
 const RULER_SIZE = 24
 const RULER_FONT = `7.5px 'JetBrains Mono', 'Fira Code', monospace`
 
+function getBlockPreviewHeight(block: RenderedPage['blocks'][number], zoom: number) {
+  return block.lines.length * block.lineHeight * zoom
+}
+
 function HorizontalRuler({ zoom, panX, maxVal }: { zoom: number; panX: number; maxVal: number }) {
   const containerRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -379,7 +383,7 @@ export function CanvasPreview({
                     top: block.y * zoom,
                     width: block.width * zoom,
                     maxWidth: block.width * zoom,
-                    height: block.lines.length * block.lineHeight * zoom,
+                    height: getBlockPreviewHeight(block, zoom),
                     fontSize: block.fontSize * zoom,
                     lineHeight: `${block.lineHeight * zoom}px`,
                     fontWeight: block.fontWeight,
@@ -387,7 +391,7 @@ export function CanvasPreview({
                     letterSpacing: `${(block.letterSpacing ?? 0) * zoom}px`,
                     textAlign: block.align,
                     fontFamily: 'Georgia, "Times New Roman", serif',
-                    overflow: 'hidden',
+                    overflow: 'clip',
                   }}
                 >
                   {getRenderedBlockLines(block).join('\n')}
