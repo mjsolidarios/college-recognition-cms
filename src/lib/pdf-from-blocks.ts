@@ -3,6 +3,13 @@ import type { jsPDF } from 'jspdf'
 import { getRenderedBlockLines } from '@/lib/rendered-block-text'
 import { PAGE_HEIGHT, PAGE_WIDTH, type RenderTextBlock, type RenderedPage } from '@/types/cms'
 
+/** 1:1 with canvas layout coords; MediaBox is exactly PAGE_WIDTH × PAGE_HEIGHT (not px→pt scaled). */
+const PDF_DOC_OPTIONS = {
+  unit: 'pt' as const,
+  format: [PAGE_WIDTH, PAGE_HEIGHT] as [number, number],
+  compress: true,
+}
+
 function yieldToMain() {
   return new Promise<void>((resolve) => {
     setTimeout(resolve, 0)
@@ -72,11 +79,11 @@ export async function renderPdfBlob(
   const total = pages.length
 
   if (total === 0) {
-    const doc = new jsPDF({ unit: 'px', format: [PAGE_WIDTH, PAGE_HEIGHT], compress: true })
+    const doc = new jsPDF(PDF_DOC_OPTIONS)
     return doc.output('blob')
   }
 
-  let doc = new jsPDF({ unit: 'px', format: [PAGE_WIDTH, PAGE_HEIGHT], compress: true })
+  let doc = new jsPDF(PDF_DOC_OPTIONS)
   drawPage(doc, pages[0]!)
   onPage?.(0, total)
 

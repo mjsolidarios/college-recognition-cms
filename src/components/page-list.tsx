@@ -44,32 +44,33 @@ function SortablePageItem({
   const config = PAGE_TYPE_CONFIG[page.type]
 
   return (
-    <button
+    <div
       ref={(node) => {
         setDroppableRef(node)
         setDraggableRef(node)
       }}
-      type="button"
       style={style}
-      onClick={() => onSelect(page.id)}
       className={cn(
-        'group flex w-full items-start gap-2.5 rounded-lg border px-3 py-2.5 text-left transition-colors duration-200',
+        'group flex w-full items-start gap-2.5 rounded-lg border px-3 py-2.5 transition-colors duration-200',
         isActive
           ? `border-l-[3px] ${config.borderColor} bg-white`
           : 'border-transparent bg-transparent hover:bg-[var(--surface-canvas)]',
         isOver && 'ring-2 ring-[color:color-mix(in_srgb,var(--color-primary)_18%,transparent)]',
-        isDragging && 'opacity-60 scale-[1.02]',
+        isDragging && 'scale-[1.02] opacity-60',
       )}
     >
       <span
         className={cn('mt-0.5 inline-flex cursor-grab text-[var(--color-muted-soft)] transition-colors hover:text-[var(--color-muted)]', isActive && 'text-[var(--color-muted)]')}
         {...listeners}
         {...attributes}
-        onClick={(event) => event.stopPropagation()}
       >
         <GripVertical className="size-4" />
       </span>
-      <span className="min-w-0 flex-1 space-y-1">
+      <button
+        type="button"
+        className="min-w-0 flex-1 space-y-1 text-left"
+        onClick={() => onSelect(page.id)}
+      >
         <span className="flex items-center gap-2">
           <span className={cn('text-xs font-medium tabular-nums text-[var(--color-muted-soft)]', isActive && 'text-[var(--color-muted)]')}>
             {String(index + 1).padStart(2, '0')}
@@ -77,22 +78,17 @@ function SortablePageItem({
           <span className={cn('block truncate text-sm font-semibold', isActive ? 'text-[var(--color-ink)]' : 'text-[var(--color-body)]')}>{page.title}</span>
         </span>
         <TypeBadge type={page.type} />
-      </span>
-      <span className="opacity-0 transition-opacity group-hover:opacity-100">
-        <Button
-          type="button"
-          size="icon"
-          variant="ghost"
-          className="size-7 text-[var(--color-muted)] hover:text-[#cf2d56]"
-          onClick={(event) => {
-            event.stopPropagation()
-            onDelete(page.id)
-          }}
-        >
-          <Trash2 className="size-3.5" />
-        </Button>
-      </span>
-    </button>
+      </button>
+      <Button
+        type="button"
+        size="icon"
+        variant="ghost"
+        className="size-7 text-[var(--color-muted)] opacity-0 transition-opacity hover:text-[#cf2d56] group-hover:opacity-100"
+        onClick={() => onDelete(page.id)}
+      >
+        <Trash2 className="size-3.5" />
+      </Button>
+    </div>
   )
 }
 
