@@ -192,7 +192,7 @@ function SliderSetting({
 const MIN_EDITOR_WIDTH = 280
 const MAX_EDITOR_WIDTH = 560
 const DEFAULT_EDITOR_WIDTH = 360
-/** Wait two animation frames so React can commit and the browser can paint the exporting state. */
+/** Wait two animation frames: one for React to commit, one for the browser to paint the exporting state. */
 const waitForUiUpdate = () =>
   new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())))
 
