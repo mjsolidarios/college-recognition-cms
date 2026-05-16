@@ -216,6 +216,10 @@ function measureWidth(text: string, options: MeasureOptions) {
 }
 
 function splitLongToken(token: string, width: number, options: MeasureOptions) {
+  if (width <= 0) {
+    return [token]
+  }
+
   const parts: string[] = []
   let remaining = token
 
@@ -422,6 +426,10 @@ function estimateTextHeight(
   return visibleLines * resolved.lineHeight + (includeSpacing ? resolved.blockSpacing : 0)
 }
 
+function getEffectiveReserve(contentHeight: number, reserveHeight: number, maxContentHeight: number) {
+  return contentHeight + reserveHeight <= maxContentHeight ? reserveHeight : 0
+}
+
 function addLinesToFlow(context: LayoutContext, options: TextOptions) {
   const resolved = resolveTextLayout(context, options)
   const {
@@ -463,7 +471,7 @@ function addLinesToFlow(context: LayoutContext, options: TextOptions) {
   if (options.allowSplit === false) {
     const height = lines.length * lineHeight
     // If a block already consumes a full page, drop the keep-with-next reserve so it can still render.
-    const effectiveReserve = height + reserveHeight <= maxContentHeight ? reserveHeight : 0
+    const effectiveReserve = getEffectiveReserve(height, reserveHeight, maxContentHeight)
     let guard = 0
     while (guard < 48) {
       const col = resolveColumn()
@@ -505,9 +513,10 @@ function addLinesToFlow(context: LayoutContext, options: TextOptions) {
     const col = resolveColumn()
     const availableHeight = context.maxContentY - context.currentY[col]
     const availableLines = Math.floor(availableHeight / lineHeight)
-    const requiredLines = remainingLines.length > minFragmentLines ? minFragmentLines : 1
-    const keepReserve =
-      blockIndex === 0 && requiredLines * lineHeight + reserveHeight <= maxContentHeight ? reserveHeight : 0
+    const requiredLines = remainingLines.length <= minFragmentLines ? 1 : Math.min(minFragmentLines, remainingLines.length)
+    const keepReserve = blockIndex === 0
+      ? getEffectiveReserve(requiredLines * lineHeight, reserveHeight, maxContentHeight)
+      : 0
     const lacksRequiredLines = availableLines < requiredLines
     const violatesReservedSpace = context.currentY[col] + requiredLines * lineHeight + keepReserve > context.maxContentY
 
