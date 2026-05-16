@@ -31,8 +31,8 @@ export async function exportPdfDocument(pages: RenderedPage[], title: string) {
   const createPdf = rendererModule.pdf
   const PdfDocument = pdfDocumentModule.PdfDocument
 
-  if (typeof createPdf !== 'function' || typeof PdfDocument !== 'function') {
-    throw new Error('PDF export dependencies failed to load.')
+  if (typeof createPdf !== 'function' || typeof PdfDocument === 'undefined') {
+    throw new Error('Failed to load @react-pdf/renderer or the PdfDocument component.')
   }
 
   const blob = await createPdf(<PdfDocument pages={pages} />).toBlob()

@@ -192,8 +192,8 @@ function SliderSetting({
 const MIN_EDITOR_WIDTH = 280
 const MAX_EDITOR_WIDTH = 560
 const DEFAULT_EDITOR_WIDTH = 360
-/** Yield two frames so the exporting state can render before the main-thread PDF work starts. */
-const yieldForExportUi = () =>
+/** Wait two animation frames so React can commit and the browser can paint the exporting state. */
+const waitForUiUpdate = () =>
   new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())))
 
 function App() {
@@ -264,7 +264,7 @@ function App() {
   const handleExportPdf = async () => {
     setIsExporting(true)
     try {
-      await yieldForExportUi()
+      await waitForUiUpdate()
       await exportPdfDocument(renderedPages, documentTitle)
     } finally {
       setIsExporting(false)
