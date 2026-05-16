@@ -1,11 +1,124 @@
 import { ChevronLeft, ChevronRight, Minus, Plus } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { renderDocument } from '@/lib/layout'
 import { cn } from '@/lib/utils'
 import { PAGE_HEIGHT, PAGE_WIDTH, type CmsPage, type CmsSettings } from '@/types/cms'
+
+const RULER_SIZE = 24
+const RULER_FONT = `7.5px Inter, system-ui, -apple-system, sans-serif`
+
+function HorizontalRuler({ width, zoom }: { width: number; zoom: number }) {
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const cssWidth = Math.round(width * zoom)
+
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+
+    const dpr = window.devicePixelRatio || 1
+    canvas.style.width = `${cssWidth}px`
+    canvas.style.height = `${RULER_SIZE}px`
+    canvas.width = cssWidth * dpr
+    canvas.height = RULER_SIZE * dpr
+    ctx.scale(dpr, dpr)
+
+    ctx.clearRect(0, 0, cssWidth, RULER_SIZE)
+    ctx.fillStyle = '#edecea'
+    ctx.fillRect(0, 0, cssWidth, RULER_SIZE)
+
+    ctx.strokeStyle = '#c8c5be'
+    ctx.lineWidth = 0.5
+
+    ctx.beginPath()
+    ctx.moveTo(0, RULER_SIZE - 0.5)
+    ctx.lineTo(cssWidth, RULER_SIZE - 0.5)
+    ctx.stroke()
+
+    ctx.fillStyle = '#a8a29e'
+    ctx.font = RULER_FONT
+    ctx.textBaseline = 'top'
+    ctx.textAlign = 'left'
+
+    for (let i = 0; i <= width; i += 50) {
+      const x = i * zoom
+      const isMajor = i % 100 === 0
+      const tickH = isMajor ? RULER_SIZE * 0.5 : RULER_SIZE * 0.3
+
+      ctx.beginPath()
+      ctx.moveTo(x, RULER_SIZE)
+      ctx.lineTo(x, RULER_SIZE - tickH)
+      ctx.stroke()
+
+      if (isMajor && i > 0) {
+        ctx.fillText(String(i), x + 2, 3)
+      }
+    }
+  }, [cssWidth, zoom, width])
+
+  return <canvas ref={canvasRef} style={{ display: 'block', flexShrink: 0 }} />
+}
+
+function VerticalRuler({ height, zoom }: { height: number; zoom: number }) {
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const cssHeight = Math.round(height * zoom)
+
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+
+    const dpr = window.devicePixelRatio || 1
+    canvas.style.width = `${RULER_SIZE}px`
+    canvas.style.height = `${cssHeight}px`
+    canvas.width = RULER_SIZE * dpr
+    canvas.height = cssHeight * dpr
+    ctx.scale(dpr, dpr)
+
+    ctx.clearRect(0, 0, RULER_SIZE, cssHeight)
+    ctx.fillStyle = '#edecea'
+    ctx.fillRect(0, 0, RULER_SIZE, cssHeight)
+
+    ctx.strokeStyle = '#c8c5be'
+    ctx.lineWidth = 0.5
+
+    ctx.beginPath()
+    ctx.moveTo(RULER_SIZE - 0.5, 0)
+    ctx.lineTo(RULER_SIZE - 0.5, cssHeight)
+    ctx.stroke()
+
+    ctx.fillStyle = '#a8a29e'
+    ctx.font = RULER_FONT
+    ctx.textBaseline = 'middle'
+    ctx.textAlign = 'center'
+
+    for (let i = 0; i <= height; i += 50) {
+      const y = i * zoom
+      const isMajor = i % 100 === 0
+      const tickW = isMajor ? RULER_SIZE * 0.5 : RULER_SIZE * 0.3
+
+      ctx.beginPath()
+      ctx.moveTo(RULER_SIZE, y)
+      ctx.lineTo(RULER_SIZE - tickW, y)
+      ctx.stroke()
+
+      if (isMajor && i > 0) {
+        ctx.save()
+        ctx.translate(RULER_SIZE / 2 - 1, y)
+        ctx.rotate(-Math.PI / 2)
+        ctx.fillText(String(i), 0, 0)
+        ctx.restore()
+      }
+    }
+  }, [cssHeight, zoom, height])
+
+  return <canvas ref={canvasRef} style={{ display: 'block', flexShrink: 0 }} />
+}
 
 export function CanvasPreview({
   pages,
@@ -112,33 +225,55 @@ export function CanvasPreview({
       {/* Canvas */}
       <div className="min-h-0 flex-1 border-b border-stone-100">
         <ScrollArea className="h-full">
-          <div className="canvas-pattern flex min-h-full items-start justify-center px-6 py-8">
+          <div className="canvas-pattern flex min-h-full items-start justify-center p-8">
             {currentPage ? (
-              <div className={cn('animate-fade-in flex flex-col items-center gap-3')}>
-                <div
-                  className="relative bg-white shadow-[0_1px_4px_rgba(0,0,0,0.06),0_4px_16px_rgba(0,0,0,0.05)]"
-                  style={{ width: PAGE_WIDTH * zoom, height: PAGE_HEIGHT * zoom }}
-                >
-                  {currentPage.blocks.map((block) => (
-                    <div
-                      key={block.id}
-                      className={cn('absolute whitespace-pre-wrap text-stone-950', block.uppercase && 'uppercase')}
-                      style={{
-                        left: block.x * zoom,
-                        top: block.y * zoom,
-                        width: block.width * zoom,
-                        fontSize: block.fontSize * zoom,
-                        lineHeight: `${block.lineHeight * zoom}px`,
-                        fontWeight: block.fontWeight,
-                        fontStyle: block.fontStyle,
-                        letterSpacing: `${(block.letterSpacing ?? 0) * zoom}px`,
-                        textAlign: block.align,
-                        fontFamily: 'Georgia, Times New Roman, serif',
-                      }}
-                    >
-                      {block.lines.join('\n')}
-                    </div>
-                  ))}
+              <div className={cn('animate-fade-in flex flex-col')}>
+                {/* Top row: corner + horizontal ruler */}
+                <div className="flex">
+                  <div
+                    style={{
+                      width: RULER_SIZE,
+                      height: RULER_SIZE,
+                      flexShrink: 0,
+                      backgroundColor: '#edecea',
+                      borderRight: '1px solid #c8c5be',
+                      borderBottom: '1px solid #c8c5be',
+                    }}
+                  />
+                  <HorizontalRuler width={PAGE_WIDTH} zoom={zoom} />
+                </div>
+                {/* Content row: vertical ruler + page */}
+                <div className="flex">
+                  <VerticalRuler height={PAGE_HEIGHT} zoom={zoom} />
+                  <div
+                    className="relative overflow-hidden bg-white shadow-[0_1px_4px_rgba(0,0,0,0.06),0_4px_16px_rgba(0,0,0,0.05)]"
+                    style={{ width: PAGE_WIDTH * zoom, height: PAGE_HEIGHT * zoom }}
+                  >
+                    {currentPage.blocks.map((block) => (
+                      <div
+                        key={block.id}
+                        className={cn(
+                          'absolute whitespace-pre overflow-hidden text-stone-950',
+                          block.uppercase && 'uppercase',
+                        )}
+                        style={{
+                          left: block.x * zoom,
+                          top: block.y * zoom,
+                          width: block.width * zoom,
+                          height: block.lines.length * block.lineHeight * zoom,
+                          fontSize: block.fontSize * zoom,
+                          lineHeight: `${block.lineHeight * zoom}px`,
+                          fontWeight: block.fontWeight,
+                          fontStyle: block.fontStyle,
+                          letterSpacing: `${(block.letterSpacing ?? 0) * zoom}px`,
+                          textAlign: block.align,
+                          fontFamily: 'Georgia, Times New Roman, serif',
+                        }}
+                      >
+                        {block.lines.join('\n')}
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </div>
             ) : (
