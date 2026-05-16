@@ -130,7 +130,9 @@ function measureWidth(text: string, fontSize: number, fontWeight: 'normal' | 'bo
     return text.length * fontSize * 0.52
   }
 
-  return context.measureText(text).width
+  // Add a small safety margin to account for differences between Canvas text metrics
+  // and browser DOM font rendering (kerning, letter-spacing, etc).
+  return context.measureText(text).width * 1.02 + 2
 }
 
 function wrapParagraph(

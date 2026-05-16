@@ -2,7 +2,6 @@ import { ChevronLeft, ChevronRight, Minus, Plus } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 
 import { Button } from '@/components/ui/button'
-import { ScrollArea } from '@/components/ui/scroll-area'
 import { renderDocument } from '@/lib/layout'
 import { cn } from '@/lib/utils'
 import { PAGE_HEIGHT, PAGE_WIDTH, type CmsPage, type CmsSettings } from '@/types/cms'
@@ -10,33 +9,42 @@ import { PAGE_HEIGHT, PAGE_WIDTH, type CmsPage, type CmsSettings } from '@/types
 const RULER_SIZE = 24
 const RULER_FONT = `7.5px Inter, system-ui, -apple-system, sans-serif`
 
-function HorizontalRuler({ width, zoom }: { width: number; zoom: number }) {
+function HorizontalRuler({ zoom, panX, maxVal }: { zoom: number; panX: number; maxVal: number }) {
+  const containerRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
-  const cssWidth = Math.round(width * zoom)
+  const [size, setSize] = useState({ w: 0, h: RULER_SIZE })
+
+  useEffect(() => {
+    if (!containerRef.current) return
+    const observer = new ResizeObserver((entries) => {
+      setSize({ w: entries[0].contentRect.width, h: RULER_SIZE })
+    })
+    observer.observe(containerRef.current)
+    return () => observer.disconnect()
+  }, [])
 
   useEffect(() => {
     const canvas = canvasRef.current
-    if (!canvas) return
+    if (!canvas || size.w === 0) return
     const ctx = canvas.getContext('2d')
     if (!ctx) return
 
     const dpr = window.devicePixelRatio || 1
-    canvas.style.width = `${cssWidth}px`
+    canvas.style.width = `${size.w}px`
     canvas.style.height = `${RULER_SIZE}px`
-    canvas.width = cssWidth * dpr
+    canvas.width = size.w * dpr
     canvas.height = RULER_SIZE * dpr
     ctx.scale(dpr, dpr)
 
-    ctx.clearRect(0, 0, cssWidth, RULER_SIZE)
+    ctx.clearRect(0, 0, size.w, RULER_SIZE)
     ctx.fillStyle = '#edecea'
-    ctx.fillRect(0, 0, cssWidth, RULER_SIZE)
+    ctx.fillRect(0, 0, size.w, RULER_SIZE)
 
     ctx.strokeStyle = '#c8c5be'
     ctx.lineWidth = 0.5
-
     ctx.beginPath()
     ctx.moveTo(0, RULER_SIZE - 0.5)
-    ctx.lineTo(cssWidth, RULER_SIZE - 0.5)
+    ctx.lineTo(size.w, RULER_SIZE - 0.5)
     ctx.stroke()
 
     ctx.fillStyle = '#a8a29e'
@@ -44,7 +52,12 @@ function HorizontalRuler({ width, zoom }: { width: number; zoom: number }) {
     ctx.textBaseline = 'top'
     ctx.textAlign = 'left'
 
-    for (let i = 0; i <= width; i += 50) {
+    ctx.save()
+    ctx.translate(panX, 0)
+    const startX = Math.max(0, Math.floor(-panX / zoom / 50) * 50)
+    const endX = Math.min(maxVal, Math.ceil((size.w - panX) / zoom / 50) * 50)
+
+    for (let i = startX; i <= endX; i += 50) {
       const x = i * zoom
       const isMajor = i % 100 === 0
       const tickH = isMajor ? RULER_SIZE * 0.5 : RULER_SIZE * 0.3
@@ -58,38 +71,52 @@ function HorizontalRuler({ width, zoom }: { width: number; zoom: number }) {
         ctx.fillText(String(i), x + 2, 3)
       }
     }
-  }, [cssWidth, zoom, width])
+    ctx.restore()
+  }, [size, zoom, panX, maxVal])
 
-  return <canvas ref={canvasRef} style={{ display: 'block', flexShrink: 0 }} />
+  return (
+    <div ref={containerRef} className="h-full w-full overflow-hidden bg-[#edecea]">
+      <canvas ref={canvasRef} style={{ display: 'block' }} />
+    </div>
+  )
 }
 
-function VerticalRuler({ height, zoom }: { height: number; zoom: number }) {
+function VerticalRuler({ zoom, panY, maxVal }: { zoom: number; panY: number; maxVal: number }) {
+  const containerRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
-  const cssHeight = Math.round(height * zoom)
+  const [size, setSize] = useState({ w: RULER_SIZE, h: 0 })
+
+  useEffect(() => {
+    if (!containerRef.current) return
+    const observer = new ResizeObserver((entries) => {
+      setSize({ w: RULER_SIZE, h: entries[0].contentRect.height })
+    })
+    observer.observe(containerRef.current)
+    return () => observer.disconnect()
+  }, [])
 
   useEffect(() => {
     const canvas = canvasRef.current
-    if (!canvas) return
+    if (!canvas || size.h === 0) return
     const ctx = canvas.getContext('2d')
     if (!ctx) return
 
     const dpr = window.devicePixelRatio || 1
     canvas.style.width = `${RULER_SIZE}px`
-    canvas.style.height = `${cssHeight}px`
+    canvas.style.height = `${size.h}px`
     canvas.width = RULER_SIZE * dpr
-    canvas.height = cssHeight * dpr
+    canvas.height = size.h * dpr
     ctx.scale(dpr, dpr)
 
-    ctx.clearRect(0, 0, RULER_SIZE, cssHeight)
+    ctx.clearRect(0, 0, RULER_SIZE, size.h)
     ctx.fillStyle = '#edecea'
-    ctx.fillRect(0, 0, RULER_SIZE, cssHeight)
+    ctx.fillRect(0, 0, RULER_SIZE, size.h)
 
     ctx.strokeStyle = '#c8c5be'
     ctx.lineWidth = 0.5
-
     ctx.beginPath()
     ctx.moveTo(RULER_SIZE - 0.5, 0)
-    ctx.lineTo(RULER_SIZE - 0.5, cssHeight)
+    ctx.lineTo(RULER_SIZE - 0.5, size.h)
     ctx.stroke()
 
     ctx.fillStyle = '#a8a29e'
@@ -97,7 +124,12 @@ function VerticalRuler({ height, zoom }: { height: number; zoom: number }) {
     ctx.textBaseline = 'middle'
     ctx.textAlign = 'center'
 
-    for (let i = 0; i <= height; i += 50) {
+    ctx.save()
+    ctx.translate(0, panY)
+    const startY = Math.max(0, Math.floor(-panY / zoom / 50) * 50)
+    const endY = Math.min(maxVal, Math.ceil((size.h - panY) / zoom / 50) * 50)
+
+    for (let i = startY; i <= endY; i += 50) {
       const y = i * zoom
       const isMajor = i % 100 === 0
       const tickW = isMajor ? RULER_SIZE * 0.5 : RULER_SIZE * 0.3
@@ -115,9 +147,14 @@ function VerticalRuler({ height, zoom }: { height: number; zoom: number }) {
         ctx.restore()
       }
     }
-  }, [cssHeight, zoom, height])
+    ctx.restore()
+  }, [size, zoom, panY, maxVal])
 
-  return <canvas ref={canvasRef} style={{ display: 'block', flexShrink: 0 }} />
+  return (
+    <div ref={containerRef} className="h-full w-full overflow-hidden bg-[#edecea]">
+      <canvas ref={canvasRef} style={{ display: 'block' }} />
+    </div>
+  )
 }
 
 export function CanvasPreview({
@@ -128,9 +165,16 @@ export function CanvasPreview({
   settings: CmsSettings
 }) {
   const [zoom, setZoom] = useState(0.85)
+  const [pan, setPan] = useState({ x: 100, y: 50 })
+  const [isSpaceDown, setIsSpaceDown] = useState(false)
+  const [isDragging, setIsDragging] = useState(false)
+  
   const [currentPageIdx, setCurrentPageIdx] = useState(0)
   const renderedPages = useMemo(() => renderDocument(pages, settings), [pages, settings])
   const pageCount = renderedPages.length
+
+  const containerRef = useRef<HTMLDivElement>(null)
+  const lastPointerRef = useRef<{ x: number; y: number } | null>(null)
 
   // Keep current page in bounds when pages are added/removed
   useEffect(() => {
@@ -143,10 +187,98 @@ export function CanvasPreview({
   const goToPrev = () => setCurrentPageIdx((i) => Math.max(0, i - 1))
   const goToNext = () => setCurrentPageIdx((i) => Math.min(pageCount - 1, i + 1))
 
+  // Keyboard Spacebar for panning mode
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
+      if (e.code === 'Space' && !e.repeat) {
+        e.preventDefault()
+        setIsSpaceDown(true)
+      }
+    }
+    const onKeyUp = (e: KeyboardEvent) => {
+      if (e.code === 'Space') {
+        setIsSpaceDown(false)
+        setIsDragging(false)
+        lastPointerRef.current = null
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    window.addEventListener('keyup', onKeyUp)
+    return () => {
+      window.removeEventListener('keydown', onKeyDown)
+      window.removeEventListener('keyup', onKeyUp)
+    }
+  }, [])
+
+  // Non-passive wheel listener for zoom / scroll
+  useEffect(() => {
+    const el = containerRef.current
+    if (!el) return
+    const onWheel = (e: WheelEvent) => {
+      if (e.ctrlKey || e.metaKey) {
+        e.preventDefault()
+        const zoomFactor = e.deltaY > 0 ? 0.9 : 1.1
+        setZoom((prevZoom) => {
+          const newZoom = Math.min(Math.max(0.2, +(prevZoom * zoomFactor).toFixed(2)), 3)
+          if (newZoom !== prevZoom) {
+            const rect = el.getBoundingClientRect()
+            const mouseX = e.clientX - rect.left - RULER_SIZE
+            const mouseY = e.clientY - rect.top - RULER_SIZE
+            setPan((prevPan) => {
+              const unzoomedX = (mouseX - prevPan.x) / prevZoom
+              const unzoomedY = (mouseY - prevPan.y) / prevZoom
+              return {
+                x: mouseX - unzoomedX * newZoom,
+                y: mouseY - unzoomedY * newZoom
+              }
+            })
+          }
+          return newZoom
+        })
+      } else {
+        // Panning via scroll wheel or trackpad
+        setPan((prev) => ({
+          x: prev.x - e.deltaX,
+          y: prev.y - e.deltaY
+        }))
+      }
+    }
+    el.addEventListener('wheel', onWheel, { passive: false })
+    return () => el.removeEventListener('wheel', onWheel)
+  }, [])
+
+  // Mouse interaction
+  const handlePointerDown = (e: React.PointerEvent) => {
+    if (e.button === 1 || (e.button === 0 && isSpaceDown)) {
+      e.preventDefault()
+      setIsDragging(true)
+      lastPointerRef.current = { x: e.clientX, y: e.clientY }
+      e.currentTarget.setPointerCapture(e.pointerId)
+    }
+  }
+
+  const handlePointerMove = (e: React.PointerEvent) => {
+    if (isDragging && lastPointerRef.current) {
+      const dx = e.clientX - lastPointerRef.current.x
+      const dy = e.clientY - lastPointerRef.current.y
+      setPan((prev) => ({ x: prev.x + dx, y: prev.y + dy }))
+      lastPointerRef.current = { x: e.clientX, y: e.clientY }
+    }
+  }
+
+  const handlePointerUp = (e: React.PointerEvent) => {
+    setIsDragging(false)
+    lastPointerRef.current = null
+    e.currentTarget.releasePointerCapture(e.pointerId)
+  }
+
+  const cursorClass = isDragging ? 'cursor-grabbing' : isSpaceDown ? 'cursor-grab' : 'cursor-default'
+
   return (
     <div className="flex h-full min-h-0 flex-col rounded-xl border border-stone-200/80 bg-white shadow-sm">
       {/* Header */}
-      <div className="flex items-center justify-between gap-2 border-b border-stone-100 px-4 py-2.5">
+      <div className="flex items-center justify-between gap-2 border-b border-stone-100 px-4 py-2.5 z-10 bg-white rounded-t-xl">
         <div className="min-w-0">
           <h2 className="text-sm font-semibold text-stone-900">Canvas Preview</h2>
           <p className="truncate text-xs text-stone-400">
@@ -154,54 +286,27 @@ export function CanvasPreview({
           </p>
         </div>
 
-        {/* Pagination */}
+        {/* Zoom Controls */}
         <div className="flex items-center gap-1">
           <Button
             type="button"
             variant="ghost"
             size="icon"
             className="size-7"
-            disabled={safeIdx === 0}
-            onClick={goToPrev}
-          >
-            <ChevronLeft className="size-3.5" />
-          </Button>
-          <span className="min-w-[3.5rem] text-center text-[11px] font-semibold tabular-nums text-stone-600">
-            {pageCount > 0 ? `${safeIdx + 1} / ${pageCount}` : '–'}
-          </span>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="size-7"
-            disabled={safeIdx >= pageCount - 1}
-            onClick={goToNext}
-          >
-            <ChevronRight className="size-3.5" />
-          </Button>
-        </div>
-
-        {/* Zoom */}
-        <div className="flex items-center gap-1">
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="size-7"
-            onClick={() => setZoom((z) => Math.max(0.45, +(z - 0.1).toFixed(2)))}
+            onClick={() => setZoom((z) => Math.max(0.2, +(z - 0.1).toFixed(2)))}
           >
             <Minus className="size-3.5" />
           </Button>
           <div className="relative h-1.5 w-16 rounded-full bg-stone-100">
             <div
               className="absolute inset-y-0 left-0 rounded-full bg-indigo-400/60 transition-all duration-200"
-              style={{ width: `${((zoom - 0.45) / (1.35 - 0.45)) * 100}%` }}
+              style={{ width: `${((zoom - 0.2) / (3 - 0.2)) * 100}%` }}
             />
             <input
               type="range"
-              min={0.45}
-              max={1.35}
-              step={0.05}
+              min={0.2}
+              max={3}
+              step={0.1}
               value={zoom}
               onChange={(e) => setZoom(Number(e.target.value))}
               className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
@@ -212,79 +317,98 @@ export function CanvasPreview({
             variant="ghost"
             size="icon"
             className="size-7"
-            onClick={() => setZoom((z) => Math.min(1.35, +(z + 0.1).toFixed(2)))}
+            onClick={() => setZoom((z) => Math.min(3, +(z + 0.1).toFixed(2)))}
           >
             <Plus className="size-3.5" />
           </Button>
-          <span className="w-9 text-center text-[11px] font-medium tabular-nums text-stone-400">
+          <span className="w-10 text-center text-[11px] font-medium tabular-nums text-stone-400">
             {Math.round(zoom * 100)}%
           </span>
         </div>
       </div>
 
-      {/* Canvas */}
-      <div className="min-h-0 flex-1 border-b border-stone-100">
-        <ScrollArea className="h-full">
-          <div className="canvas-pattern flex min-h-full items-start justify-center p-8">
-            {currentPage ? (
-              <div className={cn('animate-fade-in flex flex-col')}>
-                {/* Top row: corner + horizontal ruler */}
-                <div className="flex">
-                  <div
-                    style={{
-                      width: RULER_SIZE,
-                      height: RULER_SIZE,
-                      flexShrink: 0,
-                      backgroundColor: '#edecea',
-                      borderRight: '1px solid #c8c5be',
-                      borderBottom: '1px solid #c8c5be',
-                    }}
-                  />
-                  <HorizontalRuler width={PAGE_WIDTH} zoom={zoom} />
+      {/* Infinite Canvas Viewport */}
+      <div
+        ref={containerRef}
+        className={cn('min-h-0 flex-1 relative overflow-hidden bg-[#f5f5f4]', cursorClass)}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onPointerCancel={handlePointerUp}
+        onContextMenu={(e) => {
+          if (isSpaceDown || isDragging) e.preventDefault()
+        }}
+      >
+        {/* Top-left corner box */}
+        <div
+          className="absolute left-0 top-0 z-20 bg-[#edecea] border-r border-b border-[#c8c5be]"
+          style={{ width: RULER_SIZE, height: RULER_SIZE }}
+        />
+
+        {/* Fixed Horizontal Ruler */}
+        <div
+          className="absolute top-0 z-10"
+          style={{ left: RULER_SIZE, right: 0, height: RULER_SIZE }}
+        >
+          <HorizontalRuler zoom={zoom} panX={pan.x} maxVal={PAGE_WIDTH} />
+        </div>
+
+        {/* Fixed Vertical Ruler */}
+        <div
+          className="absolute left-0 z-10"
+          style={{ top: RULER_SIZE, bottom: 0, width: RULER_SIZE }}
+        >
+          <VerticalRuler zoom={zoom} panY={pan.y} maxVal={PAGE_HEIGHT} />
+        </div>
+
+        {/* Panning Content Surface */}
+        <div
+          className="absolute origin-top-left"
+          style={{
+            left: RULER_SIZE,
+            top: RULER_SIZE,
+            transform: `translate(${pan.x}px, ${pan.y}px)`,
+          }}
+        >
+          {currentPage ? (
+            <div
+              className="absolute bg-white shadow-[0_1px_4px_rgba(0,0,0,0.06),0_4px_16px_rgba(0,0,0,0.05)] ring-1 ring-stone-900/5 transition-opacity animate-fade-in"
+              style={{ width: PAGE_WIDTH * zoom, height: PAGE_HEIGHT * zoom }}
+            >
+              {currentPage.blocks.map((block) => (
+                <div
+                  key={block.id}
+                  className={cn(
+                    'absolute whitespace-pre text-stone-950 pointer-events-none',
+                    block.uppercase && 'uppercase'
+                  )}
+                  style={{
+                    left: block.x * zoom,
+                    top: block.y * zoom,
+                    width: block.width * zoom,
+                    fontSize: block.fontSize * zoom,
+                    lineHeight: `${block.lineHeight * zoom}px`,
+                    fontWeight: block.fontWeight,
+                    fontStyle: block.fontStyle,
+                    letterSpacing: `${(block.letterSpacing ?? 0) * zoom}px`,
+                    textAlign: block.align,
+                    fontFamily: 'Georgia, "Times New Roman", serif',
+                  }}
+                >
+                  {block.lines.join('\n')}
                 </div>
-                {/* Content row: vertical ruler + page */}
-                <div className="flex">
-                  <VerticalRuler height={PAGE_HEIGHT} zoom={zoom} />
-                  <div
-                    className="relative overflow-hidden bg-white shadow-[0_1px_4px_rgba(0,0,0,0.06),0_4px_16px_rgba(0,0,0,0.05)]"
-                    style={{ width: PAGE_WIDTH * zoom, height: PAGE_HEIGHT * zoom }}
-                  >
-                    {currentPage.blocks.map((block) => (
-                      <div
-                        key={block.id}
-                        className={cn(
-                          'absolute whitespace-pre overflow-hidden text-stone-950',
-                          block.uppercase && 'uppercase',
-                        )}
-                        style={{
-                          left: block.x * zoom,
-                          top: block.y * zoom,
-                          width: block.width * zoom,
-                          height: block.lines.length * block.lineHeight * zoom,
-                          fontSize: block.fontSize * zoom,
-                          lineHeight: `${block.lineHeight * zoom}px`,
-                          fontWeight: block.fontWeight,
-                          fontStyle: block.fontStyle,
-                          letterSpacing: `${(block.letterSpacing ?? 0) * zoom}px`,
-                          textAlign: block.align,
-                          fontFamily: 'Georgia, Times New Roman, serif',
-                        }}
-                      >
-                        {block.lines.join('\n')}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <p className="mt-12 text-sm text-stone-400">No pages to preview.</p>
-            )}
-          </div>
-        </ScrollArea>
+              ))}
+            </div>
+          ) : (
+            <div className="absolute left-0 top-0 translate-x-[100px] translate-y-[50px]">
+              <p className="text-sm font-medium text-stone-400">No pages to preview.</p>
+            </div>
+          )}
+        </div>
       </div>
 
-      {/* Footer */}
-      <div className="flex items-center justify-between gap-3 px-4 py-2.5 bg-stone-50 rounded-b-xl">
+      {/* Footer Navigation */}
+      <div className="flex items-center justify-between gap-3 border-t border-stone-200 px-4 py-2.5 bg-stone-50 rounded-b-xl z-10">
         <div className="text-xs font-medium text-stone-500">
           Page {pageCount > 0 ? safeIdx + 1 : 0} of {pageCount}
         </div>
