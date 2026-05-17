@@ -48,7 +48,7 @@ export function ExportDialog({ pages, settings, title, frontCover, backCover }: 
       <DialogContent showClose={false} className="max-w-xl">
         <div className="flex items-start justify-between gap-3">
           <DialogHeader className="pr-0">
-            <DialogTitle>Export Booklet Data</DialogTitle>
+            <DialogTitle>Export Parangal Data</DialogTitle>
             <DialogDescription>
               {pages.length} page{pages.length !== 1 ? 's' : ''} · Copy or download as JSON
             </DialogDescription>
