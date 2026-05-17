@@ -1015,7 +1015,9 @@ function App() {
               className="rounded-full bg-[var(--surface-canvas)] px-2 py-0.5 text-[10px] font-medium text-[var(--color-muted)]"
               title={focusedLayoutItemId ?? undefined}
             >
-              Selection: {focusedLayoutItemId ? `Item ${focusedLayoutItemId.slice(0, DISPLAY_ITEM_ID_LENGTH)}` : 'None'}
+              Selection: {focusedLayoutItemId
+                ? `Item ${focusedLayoutItemId.slice(0, DISPLAY_ITEM_ID_LENGTH)}${focusedLayoutItemId.length > DISPLAY_ITEM_ID_LENGTH ? '…' : ''}`
+                : 'None'}
             </span>
             <span className="inline-flex items-center gap-1 rounded-full bg-[var(--surface-canvas)] px-2 py-0.5 text-[10px] font-medium text-[var(--color-muted)]">
               <CheckCircle2 className="size-3" />
