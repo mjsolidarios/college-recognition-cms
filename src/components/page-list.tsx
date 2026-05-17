@@ -58,7 +58,7 @@ function SortablePageItem({
         'group flex w-full rounded-xl border transition-all duration-200',
         collapsed ? 'flex-col items-center gap-2 px-2 py-2.5' : 'items-start gap-2.5 px-3 py-2.5',
         isActive
-          ? `${config.borderColor} bg-white shadow-[0_10px_30px_rgba(15,23,42,0.06)]`
+          ? `${config.borderColor} bg-white shadow-[var(--shadow-panel-active)]`
           : 'border-transparent bg-transparent hover:bg-[var(--surface-canvas)]',
         isOver && 'ring-2 ring-[color:color-mix(in_srgb,var(--color-primary)_18%,transparent)]',
         isDragging && 'scale-[1.02] opacity-60',
@@ -109,7 +109,10 @@ function SortablePageItem({
           type="button"
           size="icon"
           variant="ghost"
-          className="size-7 text-[var(--color-muted)] opacity-100 transition-opacity hover:text-[#cf2d56] sm:opacity-0 sm:group-hover:opacity-100"
+          className={cn(
+            'size-7 text-[var(--color-muted)] opacity-0 transition-opacity hover:text-[var(--color-danger)] group-focus-within:opacity-100 sm:group-hover:opacity-100',
+            isActive && 'opacity-100',
+          )}
           onClick={() => onDelete(page.id)}
           aria-label={`Delete ${page.title}`}
           title={`Delete ${page.title}`}
@@ -143,7 +146,8 @@ export function PageList({
   onToggleCollapsed?: () => void
 }) {
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }))
-  const activePage = pages.find((page) => page.id === activePageId) ?? pages[0]
+  const activePage = pages.find((page) => page.id === activePageId) ?? pages.at(0) ?? null
+  const addButtonGroupClass = collapsed ? 'grid grid-cols-1 gap-1.5' : 'flex gap-2 overflow-x-auto pb-1 sm:grid sm:grid-cols-2 sm:overflow-visible sm:pb-0'
 
   const handleDragEnd = ({ active, over }: DragEndEvent) => {
     if (!over || active.id === over.id) {
@@ -156,7 +160,7 @@ export function PageList({
   return (
     <div
       className={cn(
-        'flex h-full flex-col overflow-hidden rounded-2xl border border-[var(--color-hairline)] bg-white shadow-[0_16px_45px_rgba(15,23,42,0.04)]',
+        'flex h-full flex-col overflow-hidden rounded-2xl border border-[var(--color-hairline)] bg-white shadow-[var(--shadow-panel)]',
         collapsed && 'items-center',
       )}
     >
@@ -166,9 +170,7 @@ export function PageList({
             <h2 className="text-sm font-semibold text-[var(--color-ink)]">Pages</h2>
             <p className="text-xs text-[var(--color-muted)]">
               {pages.length} page{pages.length !== 1 ? 's' : ''}
-              {collapsed
-                ? ''
-                : ' · drag to reorder'}
+              {!collapsed && ' · drag to reorder'}
             </p>
             {!collapsed && activePage ? (
               <p className="mt-1 truncate text-[11px] text-[var(--color-muted-soft)]">
@@ -199,10 +201,17 @@ export function PageList({
       </div>
 
       <div className={cn('border-b border-[var(--color-hairline-soft)]', collapsed ? 'w-full px-2 py-2.5' : 'px-3 py-3')}>
-        <div className={cn(collapsed ? 'grid grid-cols-1 gap-1.5' : 'flex gap-2 overflow-x-auto pb-1 sm:grid sm:grid-cols-2 sm:overflow-visible sm:pb-0')}>
+        <div
+          className={cn(addButtonGroupClass)}
+          role="region"
+          aria-label={collapsed ? 'Collapsed add page shortcuts' : 'Add page shortcuts'}
+        >
           {PAGE_TYPE_ORDER.map((pageType) => {
             const config = PAGE_TYPE_CONFIG[pageType]
             const Icon = config.icon
+            const actionButtonClass = collapsed
+              ? 'h-11 items-center justify-center px-0'
+              : 'min-w-[9.5rem] flex-shrink-0 items-center gap-1.5 px-3 py-2 sm:min-w-0'
             return (
               <button
                 key={pageType}
@@ -210,9 +219,7 @@ export function PageList({
                 onClick={() => onAdd(pageType)}
                 className={cn(
                   'flex rounded-xl border border-dashed text-xs font-medium transition-colors duration-200 hover:border-solid cursor-pointer',
-                  collapsed
-                    ? 'h-11 items-center justify-center px-0'
-                    : 'min-w-[9.5rem] flex-shrink-0 items-center gap-1.5 px-3 py-2 sm:min-w-0',
+                  actionButtonClass,
                   config.borderColor, config.color,
                   'hover:bg-[var(--surface-canvas)]',
                 )}

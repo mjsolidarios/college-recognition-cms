@@ -10,6 +10,7 @@
   --color-body: #5a5852;
   --color-muted: #807d72;
   --color-muted-soft: #a09c92;
+  --color-danger: #cf2d56;
 
   /* Hairlines + surfaces */
   --color-hairline: #e6e5e0;
@@ -20,6 +21,8 @@
   --surface-app: #f7f7f4;
   --surface-raised: #ffffff;
   --surface-strong: #e6e5e0;
+  --shadow-panel: 0 16px 45px rgba(15, 23, 42, 0.04);
+  --shadow-panel-active: 0 10px 30px rgba(15, 23, 42, 0.06);
 
   /* Type color tokens */
   --type-core: 99 102 241;       /* indigo */
