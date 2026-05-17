@@ -22,7 +22,8 @@ export function flowFromPlacement(
   const columnHeight = Math.max(1, maxContentY - contentTop)
   const yInColumn = clampNumber(y - contentTop, 0, columnHeight)
   const columnsPerPage = columnsPerPageForType(pageType)
-  return localPageIndex * columnHeight * columnsPerPage + column * columnHeight + yInColumn
+  const columnOffset = pageType === 'program' ? 0 : column * columnHeight
+  return localPageIndex * columnHeight * columnsPerPage + columnOffset + yInColumn
 }
 
 export function placementFromFlow(
@@ -36,7 +37,8 @@ export function placementFromFlow(
   const pageSpan = columnHeight * columnsPerPageForType(pageType)
   const localPageIndex = Math.floor(safeFlow / pageSpan)
   const withinPage = safeFlow - localPageIndex * pageSpan
-  const column = (withinPage >= columnHeight ? 1 : 0) as 0 | 1
+  const flowColumn = pageType === 'program' ? 0 : withinPage >= columnHeight ? 1 : 0
+  const column = flowColumn as 0 | 1
   const y = contentTop + withinPage - (column === 1 ? columnHeight : 0)
   return { localPageIndex, column, y }
 }
