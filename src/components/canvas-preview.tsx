@@ -521,14 +521,15 @@ export function CanvasPreview({
       {showHints ? (
         <div className="flex flex-wrap items-start gap-2 border-b border-[var(--color-hairline-soft)] bg-[var(--surface-canvas)] px-4 py-2 text-[11px] text-[var(--color-muted)]">
           <ul className="m-0 flex min-w-0 flex-1 list-disc flex-wrap items-center gap-x-6 gap-y-1 pl-4">
-            <li>Hold <kbd className="rounded border border-[var(--color-hairline)] bg-white px-1">Space</kbd> + drag to pan</li>
+            <li>Hold <kbd aria-label="Space key" className="rounded border border-[var(--color-hairline)] bg-white px-1">Space</kbd> + drag to pan</li>
             <li>Scroll to pan</li>
-            <li><kbd className="rounded border border-[var(--color-hairline)] bg-white px-1">Ctrl/⌘</kbd> + wheel to zoom</li>
+            <li><kbd aria-label="Control or Command key" className="rounded border border-[var(--color-hairline)] bg-white px-1">Ctrl/⌘</kbd> + wheel to zoom</li>
             <li>Select an item in Editor, then drag highlighted overlay to reflow</li>
           </ul>
           <button
             type="button"
             className="text-[11px] font-medium text-[var(--color-primary)] underline"
+            aria-label="Hide canvas navigation tips"
             onClick={() => setShowHints(false)}
           >
             Hide tips

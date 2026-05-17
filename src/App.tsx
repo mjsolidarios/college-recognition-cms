@@ -391,7 +391,7 @@ function App() {
 
   const handleDeletePage = (pageId: string) => {
     if (pages.length <= 1) {
-      window.alert('At least one page is required. Add a new page before deleting this one.')
+      window.alert('Cannot delete the last page. Add a new page before deleting this one.')
       return
     }
     const page = pages.find((entry) => entry.id === pageId)
@@ -1011,7 +1011,10 @@ function App() {
             <span className="rounded-full bg-[var(--surface-canvas)] px-2 py-0.5 text-[10px] font-medium text-[var(--color-muted)]">
               Active: {activePage?.title ?? 'No page'} · {activePage ? PAGE_LABELS[activePage.type] : '—'}
             </span>
-            <span className="rounded-full bg-[var(--surface-canvas)] px-2 py-0.5 text-[10px] font-medium text-[var(--color-muted)]">
+            <span
+              className="rounded-full bg-[var(--surface-canvas)] px-2 py-0.5 text-[10px] font-medium text-[var(--color-muted)]"
+              title={focusedLayoutItemId ?? undefined}
+            >
               Selection: {focusedLayoutItemId ? `Item ${focusedLayoutItemId.slice(0, DISPLAY_ITEM_ID_LENGTH)}` : 'None'}
             </span>
             <span className="inline-flex items-center gap-1 rounded-full bg-[var(--surface-canvas)] px-2 py-0.5 text-[10px] font-medium text-[var(--color-muted)]">

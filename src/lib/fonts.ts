@@ -9,7 +9,7 @@ export const FONT_OPTIONS: { value: FontPreset; label: string; description: stri
   {
     value: 'inter',
     label: 'Inter',
-    description: 'Highly legible modern sans-serif from Google Fonts',
+    description: 'Modern, highly legible sans-serif from Google Fonts',
   },
   {
     value: 'montserrat',
