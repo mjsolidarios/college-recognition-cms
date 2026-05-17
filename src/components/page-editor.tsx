@@ -323,13 +323,54 @@ function ProgramEditor({
               }
               >
                 <div className="space-y-3">
-                  <div className="space-y-1.5">
-                    <SectionLabel>Title</SectionLabel>
-                    <Input value={row.leftTitle} onChange={(event) => updateRow(row.id, (current) => ({ ...current, leftTitle: event.target.value }))} />
-                  </div>
-                  <div className="space-y-1.5">
-                    <SectionLabel>Body</SectionLabel>
-                    <Textarea value={row.leftBody} onChange={(event) => updateRow(row.id, (current) => ({ ...current, leftBody: event.target.value }))} />
+                  <label className="flex items-center justify-between gap-3 rounded-lg border border-[var(--color-hairline)] bg-white px-3 py-2 text-xs font-medium text-[var(--color-body)]">
+                    Two-column row
+                    <span className="toggle-switch">
+                      <input
+                        type="checkbox"
+                        checked={row.rightTitle !== undefined || row.rightBody !== undefined}
+                        onChange={(event) =>
+                          updateRow(row.id, (current) =>
+                            event.target.checked
+                              ? { ...current, rightTitle: current.rightTitle ?? '', rightBody: current.rightBody ?? '' }
+                              : { ...current, rightTitle: undefined, rightBody: undefined },
+                          )
+                        }
+                      />
+                      <span className="toggle-track" />
+                    </span>
+                  </label>
+
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <div className="space-y-3 rounded-lg border border-[var(--color-hairline)] bg-white p-3">
+                      <div className="space-y-1.5">
+                        <SectionLabel>Left title</SectionLabel>
+                        <Input value={row.leftTitle} onChange={(event) => updateRow(row.id, (current) => ({ ...current, leftTitle: event.target.value }))} />
+                      </div>
+                      <div className="space-y-1.5">
+                        <SectionLabel>Left body</SectionLabel>
+                        <Textarea value={row.leftBody} onChange={(event) => updateRow(row.id, (current) => ({ ...current, leftBody: event.target.value }))} />
+                      </div>
+                    </div>
+
+                    <div className="space-y-3 rounded-lg border border-[var(--color-hairline)] bg-white p-3">
+                      <div className="space-y-1.5">
+                        <SectionLabel>Right title</SectionLabel>
+                        <Input
+                          value={row.rightTitle ?? ''}
+                          disabled={row.rightTitle === undefined && row.rightBody === undefined}
+                          onChange={(event) => updateRow(row.id, (current) => ({ ...current, rightTitle: event.target.value }))}
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <SectionLabel>Right body</SectionLabel>
+                        <Textarea
+                          value={row.rightBody ?? ''}
+                          disabled={row.rightTitle === undefined && row.rightBody === undefined}
+                          onChange={(event) => updateRow(row.id, (current) => ({ ...current, rightBody: event.target.value }))}
+                        />
+                      </div>
+                    </div>
                   </div>
                 </div>
               </ReorderableItemCard>
