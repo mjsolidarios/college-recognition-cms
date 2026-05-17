@@ -849,7 +849,8 @@ function App() {
           const canvas = document.createElement('canvas')
           canvas.width = PAGE_WIDTH
           canvas.height = PAGE_HEIGHT
-          const ctx = canvas.getContext('2d')!
+          const ctx = canvas.getContext('2d')
+          if (!ctx) { reject(new Error('Failed to get canvas context')); return }
           ctx.drawImage(img, 0, 0, PAGE_WIDTH, PAGE_HEIGHT)
           resolve(canvas.toDataURL('image/png'))
         }

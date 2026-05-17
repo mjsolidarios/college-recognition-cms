@@ -39,6 +39,7 @@ function renderSvgBorder(page: RenderedPage, settings: CmsSettings, allPages: Re
   const { borderStyle, borderWidth, borderColor, borderPadding, borderSeparateSides, borderSvgLeft, borderSvgRight } = settings
 
   if (borderStyle === 'custom') {
+    // In standard book layout: odd pages are right-facing (recto), even pages are left-facing (verso).
     const isEven = page.pageNumber % 2 === 0
     const dataUrl = borderSeparateSides ? (isEven ? borderSvgLeft : borderSvgRight) : borderSvgLeft
     if (!dataUrl) return ''

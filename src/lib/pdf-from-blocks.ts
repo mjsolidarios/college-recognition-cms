@@ -146,6 +146,7 @@ function drawPage(doc: jsPDF, page: RenderedPage, borderOptions?: BorderRenderOp
 
   if (borderOptions && shouldPageHaveBorder(page, borderOptions.allPages)) {
     if (borderOptions.style === 'custom') {
+      // In standard book layout: odd pages are right-facing (recto), even pages are left-facing (verso).
       const isEven = page.pageNumber % 2 === 0
       const dataUrl = borderOptions.separateSides
         ? (isEven ? borderOptions.svgLeft : borderOptions.svgRight)

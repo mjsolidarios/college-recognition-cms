@@ -228,6 +228,7 @@ function BorderOverlay({
   const { style, width, color, padding, separateSides, svgLeft, svgRight } = settings
 
   if (style === 'custom') {
+    // In standard book layout: odd pages are right-facing (recto), even pages are left-facing (verso).
     const isEven = page.pageNumber % 2 === 0
     const dataUrl = separateSides ? (isEven ? svgLeft : svgRight) : svgLeft
     if (!dataUrl) return null
