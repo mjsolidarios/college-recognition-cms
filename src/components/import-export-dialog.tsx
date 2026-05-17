@@ -111,6 +111,12 @@ export function ImportDialog({ pages, onImport }: {
 
   const handleConfirm = () => {
     if (state.step !== 'valid') return
+    if (mode === 'replace') {
+      const ok = window.confirm('Replace all existing pages with imported data? This cannot be undone.')
+      if (!ok) {
+        return
+      }
+    }
     const finalPages = prepareImportPages(state.data, pages, mode)
     const summary = getImportSummary(state.data.pages)
     onImport(finalPages, state.data.settings, state.data.title, state.data.frontCover, state.data.backCover)

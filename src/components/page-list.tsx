@@ -85,6 +85,8 @@ function SortablePageItem({
         variant="ghost"
         className="size-7 text-[var(--color-muted)] opacity-0 transition-opacity hover:text-[#cf2d56] group-hover:opacity-100"
         onClick={() => onDelete(page.id)}
+        aria-label={`Delete ${page.title}`}
+        title={`Delete ${page.title}`}
       >
         <Trash2 className="size-3.5" />
       </Button>
