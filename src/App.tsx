@@ -589,7 +589,11 @@ function App() {
   )
 
   const handleLayoutItemSelect = useCallback(
-    (itemId: string) => {
+    (itemId: string | null) => {
+      if (itemId === null) {
+        setFocusedLayoutItemId(null)
+        return
+      }
       if (!activePage || !pageContainsLayoutItem(activePage, itemId)) {
         return
       }

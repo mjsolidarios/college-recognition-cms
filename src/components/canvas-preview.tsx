@@ -215,7 +215,7 @@ export function CanvasPreview({
   backCover?: string | null
   onLayoutItemReposition?: (pageId: string, itemId: string, flowPosition: number) => void
   focusedLayoutItem?: { pageId: string; itemId: string } | null
-  onLayoutItemSelect?: (itemId: string) => void
+  onLayoutItemSelect?: (itemId: string | null) => void
   onUndoSectionFlow?: () => void
   onRedoSectionFlow?: () => void
   canUndoSectionFlow?: boolean
@@ -342,6 +342,22 @@ export function CanvasPreview({
     return () => el.removeEventListener('wheel', onWheel)
   }, [])
 
+  const clearLayoutItemSelection = () => {
+    if (!focusedLayoutItem || !onLayoutItemSelect || isSpaceDown || itemDrag) {
+      return
+    }
+    onLayoutItemSelect(null)
+  }
+
+  const handleCanvasBackgroundPointerDown = (e: React.PointerEvent) => {
+    if (e.button !== 0 || isSpaceDown || itemDrag) {
+      return
+    }
+    if (e.target === e.currentTarget) {
+      clearLayoutItemSelection()
+    }
+  }
+
   // Mouse interaction
   const handlePointerDown = (e: React.PointerEvent) => {
     if (e.button === 1 || (e.button === 0 && isSpaceDown)) {
@@ -349,6 +365,10 @@ export function CanvasPreview({
       setIsDragging(true)
       lastPointerRef.current = { x: e.clientX, y: e.clientY }
       e.currentTarget.setPointerCapture(e.pointerId)
+      return
+    }
+    if (e.button === 0) {
+      handleCanvasBackgroundPointerDown(e)
     }
   }
 
@@ -638,6 +658,7 @@ export function CanvasPreview({
             <div
               className="absolute animate-fade-in overflow-hidden border border-[var(--color-hairline)] bg-white shadow-[0_1px_2px_rgba(38,37,30,0.06),0_8px_24px_rgba(38,37,30,0.08)] transition-opacity"
               style={{ width: PAGE_WIDTH * zoom, height: PAGE_HEIGHT * zoom }}
+              onPointerDown={handleCanvasBackgroundPointerDown}
             >
               {currentSlot.page.blocks.map((block) => {
                 const isSelectedBlock =

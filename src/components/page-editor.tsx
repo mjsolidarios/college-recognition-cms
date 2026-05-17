@@ -256,7 +256,7 @@ function ProgramEditor({
   page: ProgramPage
   onChange: (page: CmsPage) => void
   selectedLayoutItemId?: string | null
-  onLayoutItemSelect?: (itemId: string) => void
+  onLayoutItemSelect?: (itemId: string | null) => void
 }) {
   const sensors = useEditorReorderSensor()
   const updateRow = (rowId: string, updater: (row: ProgramRow) => ProgramRow) => {
@@ -370,7 +370,7 @@ function AcademicEditor({
   page: AcademicPage
   onChange: (page: CmsPage) => void
   selectedLayoutItemId?: string | null
-  onLayoutItemSelect?: (itemId: string) => void
+  onLayoutItemSelect?: (itemId: string | null) => void
 }) {
   const sensors = useEditorReorderSensor()
   const updateEntry = (entryId: string, updater: (entry: AcademicEntry) => AcademicEntry) => {
@@ -499,7 +499,7 @@ function NonAcademicEditor({
   page: NonAcademicPage
   onChange: (page: CmsPage) => void
   selectedLayoutItemId?: string | null
-  onLayoutItemSelect?: (itemId: string) => void
+  onLayoutItemSelect?: (itemId: string | null) => void
 }) {
   const sensors = useEditorReorderSensor()
   const updateEntry = (entryId: string, updater: (entry: NonAcademicEntry) => NonAcademicEntry) => {
@@ -623,7 +623,7 @@ function CoreEditor({
   page: CorePage
   onChange: (page: CmsPage) => void
   selectedLayoutItemId?: string | null
-  onLayoutItemSelect?: (itemId: string) => void
+  onLayoutItemSelect?: (itemId: string | null) => void
 }) {
   const sensors = useEditorReorderSensor()
   const updateSection = (sectionId: string, updater: (section: CoreSection) => CoreSection) => {
@@ -735,7 +735,7 @@ export function PageEditor({
   page: CmsPage
   onChange: (page: CmsPage) => void
   selectedLayoutItemId?: string | null
-  onLayoutItemSelect?: (itemId: string) => void
+  onLayoutItemSelect?: (itemId: string | null) => void
 }) {
   switch (page.type) {
     case 'program':
