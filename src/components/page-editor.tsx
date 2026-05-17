@@ -259,6 +259,7 @@ function ProgramEditor({
   onLayoutItemSelect?: (itemId: string | null) => void
 }) {
   const sensors = useEditorReorderSensor()
+  const programColumnCardClassName = 'space-y-3 rounded-lg border border-[var(--color-hairline)] bg-white p-3'
   const updateRow = (rowId: string, updater: (row: ProgramRow) => ProgramRow) => {
     onChange({
       ...page,
@@ -304,8 +305,11 @@ function ProgramEditor({
 
         <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
           <div className="space-y-2">
-            {page.content.rows.map((row, index) => (
-              <ReorderableItemCard
+            {page.content.rows.map((row, index) => {
+              const hasRightColumn = row.rightTitle !== undefined || row.rightBody !== undefined
+              const rightColumnToggleId = `program-row-two-column-${row.id}`
+              return (
+                <ReorderableItemCard
                 key={row.id}
                 itemId={row.id}
                 title={row.leftTitle || 'Untitled row'}
@@ -323,17 +327,63 @@ function ProgramEditor({
               }
               >
                 <div className="space-y-3">
-                  <div className="space-y-1.5">
-                    <SectionLabel>Title</SectionLabel>
-                    <Input value={row.leftTitle} onChange={(event) => updateRow(row.id, (current) => ({ ...current, leftTitle: event.target.value }))} />
+                  <div className="flex items-center justify-between gap-3 rounded-lg border border-[var(--color-hairline)] bg-white px-3 py-2 text-xs font-medium text-[var(--color-body)]">
+                    <label htmlFor={rightColumnToggleId}>Two-column row</label>
+                    <span className="toggle-switch">
+                      <input
+                        id={rightColumnToggleId}
+                        type="checkbox"
+                        checked={hasRightColumn}
+                        onChange={(event) =>
+                          updateRow(row.id, (current) =>
+                            event.target.checked
+                              ? { ...current, rightTitle: current.rightTitle ?? '', rightBody: current.rightBody ?? '' }
+                              : { ...current, rightTitle: undefined, rightBody: undefined },
+                          )
+                        }
+                      />
+                      <span className="toggle-track" />
+                    </span>
                   </div>
-                  <div className="space-y-1.5">
-                    <SectionLabel>Body</SectionLabel>
-                    <Textarea value={row.leftBody} onChange={(event) => updateRow(row.id, (current) => ({ ...current, leftBody: event.target.value }))} />
+
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <div className={programColumnCardClassName}>
+                      <div className="space-y-1.5">
+                        <SectionLabel>Left title</SectionLabel>
+                        <Input value={row.leftTitle} onChange={(event) => updateRow(row.id, (current) => ({ ...current, leftTitle: event.target.value }))} />
+                      </div>
+                      <div className="space-y-1.5">
+                        <SectionLabel>Left body</SectionLabel>
+                        <Textarea value={row.leftBody} onChange={(event) => updateRow(row.id, (current) => ({ ...current, leftBody: event.target.value }))} />
+                      </div>
+                    </div>
+
+                    <div className={programColumnCardClassName} aria-disabled={!hasRightColumn}>
+                      <div className="space-y-1.5">
+                        <SectionLabel>Right title</SectionLabel>
+                        <Input
+                          value={row.rightTitle ?? ''}
+                          disabled={!hasRightColumn}
+                          onChange={(event) => updateRow(row.id, (current) => ({ ...current, rightTitle: event.target.value }))}
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <SectionLabel>Right body</SectionLabel>
+                        <Textarea
+                          value={row.rightBody ?? ''}
+                          disabled={!hasRightColumn}
+                          onChange={(event) => updateRow(row.id, (current) => ({ ...current, rightBody: event.target.value }))}
+                        />
+                      </div>
+                      {!hasRightColumn && (
+                        <p className="text-[11px] leading-snug text-[var(--color-muted)]">Enable “Two-column row” to edit right-column content.</p>
+                      )}
+                    </div>
                   </div>
                 </div>
               </ReorderableItemCard>
-            ))}
+              )
+            })}
           </div>
         </DndContext>
         <AddButton
