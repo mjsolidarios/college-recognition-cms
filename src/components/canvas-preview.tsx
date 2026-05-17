@@ -433,7 +433,7 @@ export function CanvasPreview({
     setPan({ x: 100, y: 50 })
   }
   const setFigmaCopyFeedback = (state: 'copied' | 'error') => {
-    if (figmaCopyResetTimeoutRef.current != null) {
+    if (figmaCopyResetTimeoutRef.current !== null) {
       window.clearTimeout(figmaCopyResetTimeoutRef.current)
     }
     setFigmaCopyState(state)
@@ -480,7 +480,7 @@ export function CanvasPreview({
 
   useEffect(() => {
     return () => {
-      if (figmaCopyResetTimeoutRef.current != null) {
+      if (figmaCopyResetTimeoutRef.current !== null) {
         window.clearTimeout(figmaCopyResetTimeoutRef.current)
       }
     }
