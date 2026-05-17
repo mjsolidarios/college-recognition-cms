@@ -216,6 +216,7 @@ function SliderSetting({
 const MIN_EDITOR_WIDTH = 280
 const MAX_EDITOR_WIDTH = 560
 const DEFAULT_EDITOR_WIDTH = 360
+const DISPLAY_ITEM_ID_LENGTH = 8
 /** Wait two animation frames: one for React to commit, one for the browser to paint the exporting state. */
 const waitForUiUpdate = () =>
   new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())))
@@ -1011,7 +1012,7 @@ function App() {
               Active: {activePage?.title ?? 'No page'} · {activePage ? PAGE_LABELS[activePage.type] : '—'}
             </span>
             <span className="rounded-full bg-[var(--surface-canvas)] px-2 py-0.5 text-[10px] font-medium text-[var(--color-muted)]">
-              Selection: {focusedLayoutItemId ? `Item ${focusedLayoutItemId.slice(0, 8)}` : 'None'}
+              Selection: {focusedLayoutItemId ? `Item ${focusedLayoutItemId.slice(0, DISPLAY_ITEM_ID_LENGTH)}` : 'None'}
             </span>
             <span className="inline-flex items-center gap-1 rounded-full bg-[var(--surface-canvas)] px-2 py-0.5 text-[10px] font-medium text-[var(--color-muted)]">
               <CheckCircle2 className="size-3" />
