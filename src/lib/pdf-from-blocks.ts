@@ -1,13 +1,24 @@
 import type { jsPDF } from 'jspdf'
 
 import { getRenderedBlockLines } from '@/lib/rendered-block-text'
-import { PAGE_HEIGHT, PAGE_WIDTH, type RenderTextBlock, type RenderedPage } from '@/types/cms'
+import { PAGE_HEIGHT, PAGE_WIDTH, type BorderStyle, type RenderTextBlock, type RenderedPage } from '@/types/cms'
 
 /** 1:1 with canvas layout coords; MediaBox is exactly PAGE_WIDTH × PAGE_HEIGHT (not px→pt scaled). */
 const PDF_DOC_OPTIONS = {
   unit: 'pt' as const,
   format: [PAGE_WIDTH, PAGE_HEIGHT] as [number, number],
   compress: true,
+}
+
+export interface BorderRenderOptions {
+  style: BorderStyle
+  width: number
+  color: string
+  padding: number
+  separateSides: boolean
+  svgLeft: string | null
+  svgRight: string | null
+  allPages: RenderedPage[]
 }
 
 function yieldToMain() {
@@ -55,6 +66,55 @@ function pdfFontFamily(fontFamily: RenderTextBlock['fontFamily']) {
   }
 }
 
+function hexToRgb(hex: string): [number, number, number] {
+  const clean = hex.replace('#', '')
+  const r = parseInt(clean.substring(0, 2), 16)
+  const g = parseInt(clean.substring(2, 4), 16)
+  const b = parseInt(clean.substring(4, 6), 16)
+  return [isNaN(r) ? 26 : r, isNaN(g) ? 26 : g, isNaN(b) ? 26 : b]
+}
+
+function shouldPageHaveBorder(page: RenderedPage, allPages: RenderedPage[]): boolean {
+  if (allPages.length < 3) return false
+  const firstNum = allPages[0]?.pageNumber
+  const lastNum = allPages[allPages.length - 1]?.pageNumber
+  return page.pageNumber !== firstNum && page.pageNumber !== lastNum
+}
+
+function drawPresetBorder(doc: jsPDF, style: BorderStyle, width: number, color: string, padding: number) {
+  const [r, g, b] = hexToRgb(color)
+  doc.setDrawColor(r, g, b)
+  doc.setLineWidth(width)
+
+  const x = padding
+  const y = padding
+  const w = PAGE_WIDTH - padding * 2
+  const h = PAGE_HEIGHT - padding * 2
+
+  if (style === 'simple') {
+    doc.rect(x, y, w, h, 'S')
+  } else if (style === 'double') {
+    doc.rect(x, y, w, h, 'S')
+    const gap = width * 2 + 2
+    doc.setLineWidth(width * 0.5)
+    doc.rect(x + gap, y + gap, w - gap * 2, h - gap * 2, 'S')
+  } else if (style === 'decorative-corners') {
+    const arm = Math.min(w, h) * 0.08
+    // Top-left
+    doc.line(x, y, x + arm, y)
+    doc.line(x, y, x, y + arm)
+    // Top-right
+    doc.line(x + w, y, x + w - arm, y)
+    doc.line(x + w, y, x + w, y + arm)
+    // Bottom-left
+    doc.line(x, y + h, x + arm, y + h)
+    doc.line(x, y + h, x, y + h - arm)
+    // Bottom-right
+    doc.line(x + w, y + h, x + w - arm, y + h)
+    doc.line(x + w, y + h, x + w, y + h - arm)
+  }
+}
+
 function drawBlock(doc: jsPDF, block: RenderTextBlock) {
   const lines = getRenderedBlockLines(block)
   if (!lines.length) {
@@ -76,12 +136,27 @@ function drawBlock(doc: jsPDF, block: RenderTextBlock) {
   })
 }
 
-function drawPage(doc: jsPDF, page: RenderedPage) {
+function drawPage(doc: jsPDF, page: RenderedPage, borderOptions?: BorderRenderOptions | null) {
   doc.setFillColor(255, 255, 255)
   doc.rect(0, 0, PAGE_WIDTH, PAGE_HEIGHT, 'F')
 
   for (const block of page.blocks) {
     drawBlock(doc, block)
+  }
+
+  if (borderOptions && shouldPageHaveBorder(page, borderOptions.allPages)) {
+    if (borderOptions.style === 'custom') {
+      // In standard book layout: odd pages are right-facing (recto), even pages are left-facing (verso).
+      const isEven = page.pageNumber % 2 === 0
+      const dataUrl = borderOptions.separateSides
+        ? (isEven ? borderOptions.svgLeft : borderOptions.svgRight)
+        : borderOptions.svgLeft
+      if (dataUrl) {
+        doc.addImage(dataUrl, 'PNG', 0, 0, PAGE_WIDTH, PAGE_HEIGHT)
+      }
+    } else {
+      drawPresetBorder(doc, borderOptions.style, borderOptions.width, borderOptions.color, borderOptions.padding)
+    }
   }
 }
 
@@ -90,6 +165,7 @@ export async function renderPdfBlob(
   onPage?: (current: number, total: number) => void,
   frontCover?: string | null,
   backCover?: string | null,
+  borderOptions?: BorderRenderOptions | null,
 ) {
   const { jsPDF } = await import('jspdf')
 
@@ -115,7 +191,7 @@ export async function renderPdfBlob(
       doc.rect(0, 0, PAGE_WIDTH, PAGE_HEIGHT, 'F')
       doc.addImage(slot.dataUrl, 0, 0, PAGE_WIDTH, PAGE_HEIGHT)
     } else {
-      drawPage(doc, slot.page)
+      drawPage(doc, slot.page, borderOptions)
     }
   }
 

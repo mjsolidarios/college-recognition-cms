@@ -23,6 +23,14 @@ export const defaultSettings: CmsSettings = {
     const startYear = now.getMonth() >= 6 ? year : year - 1
     return `${startYear}–${startYear + 1}`
   })(),
+  borderEnabled: false,
+  borderStyle: 'simple',
+  borderWidth: 1,
+  borderColor: '#1a1a1a',
+  borderPadding: 12,
+  borderSeparateSides: false,
+  borderSvgLeft: null,
+  borderSvgRight: null,
 }
 
 export const seedPages: CmsPage[] = [
