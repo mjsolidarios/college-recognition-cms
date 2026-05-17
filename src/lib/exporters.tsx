@@ -91,7 +91,7 @@ function renderSvgBorder(page: RenderedPage, settings: SvgBorderSettings, allPag
   return ''
 }
 
-/** Build SVG markup for one or more rendered slots so export and clipboard flows share identical layout output. */
+/** Build vertically stacked SVG markup for rendered slots (covers and content pages) with shared export spacing and border rendering. */
 function buildSvgDocumentMarkup(
   slots: SvgExportSlot[],
   settings?: SvgBorderSettings,
@@ -209,7 +209,7 @@ export function exportSvgDocument(
   downloadFile(new Blob([markup], { type: 'image/svg+xml;charset=utf-8' }), `${fileName}.svg`)
 }
 
-/** Copy a single preview slot to the clipboard as SVG-first data with plain-text fallback for Figma paste support. */
+/** Copy one preview slot to the clipboard by trying SVG/HTML/plain-text clipboard data first, then plain-text only, throwing if both strategies fail. */
 export async function copySlotAsFigmaLayout(
   slot: SvgExportSlot,
   settings?: SvgBorderSettings,

@@ -17,7 +17,7 @@ import { PAGE_HEIGHT, PAGE_WIDTH, type BorderStyle, type RenderedPage } from '@/
 const RULER_SIZE = 24
 const RULER_FONT = `7.5px 'JetBrains Mono', 'Fira Code', monospace`
 const CANVAS_HINTS_HIDDEN_KEY = 'cms_canvas_hints_hidden'
-const FIGMA_COPY_FEEDBACK_DURATION = 2200
+const FIGMA_COPY_FEEDBACK_DURATION_MS = 2200
 
 function readHintsHiddenPreference(): boolean {
   if (typeof window === 'undefined') {
@@ -386,13 +386,8 @@ export function CanvasPreview({
 
   const safeIdx = Math.min(previewPageIndex, Math.max(0, totalSlots - 1))
   const currentSlot = displaySlots[safeIdx]
-  const currentExportSlot = currentSlot
-    ? currentSlot.kind === 'cover'
-      ? { kind: 'cover' as const, dataUrl: currentSlot.dataUrl, label: currentSlot.label }
-      : { kind: 'page' as const, page: currentSlot.page }
-    : null
   const currentExportBorderSettings: SvgBorderSettings | undefined =
-    currentExportSlot?.kind === 'page' && borderSettings
+    currentSlot?.kind === 'page' && borderSettings
       ? {
           borderEnabled: borderSettings.enabled,
           borderStyle: borderSettings.style,
@@ -440,14 +435,14 @@ export function CanvasPreview({
     figmaCopyResetTimeoutRef.current = window.setTimeout(() => {
       setFigmaCopyState('idle')
       figmaCopyResetTimeoutRef.current = null
-    }, FIGMA_COPY_FEEDBACK_DURATION)
+    }, FIGMA_COPY_FEEDBACK_DURATION_MS)
   }
   const handleCopyAsFigmaLayout = async () => {
-    if (!currentExportSlot) {
+    if (!currentSlot) {
       return
     }
     try {
-      await copySlotAsFigmaLayout(currentExportSlot, currentExportBorderSettings, renderedPages)
+      await copySlotAsFigmaLayout(currentSlot, currentExportBorderSettings, renderedPages)
       setFigmaCopyFeedback('copied')
     } catch {
       setFigmaCopyFeedback('error')
@@ -697,9 +692,10 @@ export function CanvasPreview({
             variant="ghost"
             size="sm"
             className="h-7 px-2 text-[11px] text-[var(--color-body)]"
-            disabled={!currentExportSlot}
+            disabled={!currentSlot}
             onClick={() => void handleCopyAsFigmaLayout()}
             title="Copy the current preview as an SVG layout for Figma"
+            aria-live="polite"
           >
             {figmaCopyState === 'copied'
               ? <Check aria-hidden className="mr-1 size-3.5 shrink-0 text-emerald-600" />
