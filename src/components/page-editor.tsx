@@ -334,6 +334,7 @@ function ProgramEditor({
                         id={rightColumnToggleId}
                         type="checkbox"
                         checked={hasRightColumn}
+                        aria-label={`Two-column row ${hasRightColumn ? 'enabled' : 'disabled'}`}
                         onChange={(event) =>
                           updateRow(row.id, (current) =>
                             event.target.checked
@@ -358,7 +359,7 @@ function ProgramEditor({
                       </div>
                     </div>
 
-                    <div className={programColumnCardClassName}>
+                    <div className={programColumnCardClassName} aria-disabled={!hasRightColumn}>
                       <div className="space-y-1.5">
                         <SectionLabel>Right title</SectionLabel>
                         <Input
@@ -375,6 +376,9 @@ function ProgramEditor({
                           onChange={(event) => updateRow(row.id, (current) => ({ ...current, rightBody: event.target.value }))}
                         />
                       </div>
+                      {!hasRightColumn && (
+                        <p className="text-[11px] leading-snug text-[var(--color-muted)]">Enable “Two-column row” to edit right-column content.</p>
+                      )}
                     </div>
                   </div>
                 </div>
