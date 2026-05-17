@@ -267,6 +267,8 @@ function App() {
   })
   const saveStatusTimeoutRef = useRef<number | null>(null)
   const documentTitleSaveTimeoutRef = useRef<number | null>(null)
+  const pageChangeSaveTimeoutRef = useRef<number | null>(null)
+  const settingsSaveTimeoutRef = useRef<number | null>(null)
   const lastSavedTitleRef = useRef<string | null>(null)
   pagesRef.current = pages
   cmsStateRef.current = { pages, settings, documentTitle, frontCover, backCover }
@@ -328,6 +330,12 @@ function App() {
       if (documentTitleSaveTimeoutRef.current !== null) {
         window.clearTimeout(documentTitleSaveTimeoutRef.current)
       }
+      if (pageChangeSaveTimeoutRef.current !== null) {
+        window.clearTimeout(pageChangeSaveTimeoutRef.current)
+      }
+      if (settingsSaveTimeoutRef.current !== null) {
+        window.clearTimeout(settingsSaveTimeoutRef.current)
+      }
     },
     [],
   )
@@ -380,12 +388,12 @@ function App() {
     }
 
     documentTitleSaveTimeoutRef.current = window.setTimeout(() => {
+      const titleToSave = cmsStateRef.current.documentTitle
       pulseSavedStatus()
-      void saveDocumentTitle(documentTitle, cmsStateRef.current)
+      void saveDocumentTitle(titleToSave, cmsStateRef.current)
         .then((savedTitle) => {
           lastSavedTitleRef.current = savedTitle
           setSaveError(null)
-          setDocumentTitle(savedTitle)
           markSaved()
         })
         .catch((error: unknown) => {
@@ -419,11 +427,10 @@ function App() {
     pulseSavedStatus()
     const orderedPages = [...nextPages].sort((left, right) => left.order - right.order)
     setPages(orderedPages)
+    setActivePageId((current) => current || orderedPages[0]?.id || '')
     void savePages(orderedPages, cmsStateRef.current)
-      .then((persistedPages) => {
-        setPages(persistedPages)
+      .then(() => {
         setSaveError(null)
-        setActivePageId((current) => current || persistedPages[0]?.id || '')
         markSaved()
       })
       .catch(handleStorageError)
@@ -431,7 +438,20 @@ function App() {
 
   const handlePageChange = (page: CmsPage) => {
     const nextPages = pages.map((entry) => (entry.id === page.id ? page : entry))
-    persistPages(nextPages)
+    const orderedPages = [...nextPages].sort((left, right) => left.order - right.order)
+    setPages(orderedPages)
+    pulseSavedStatus()
+    if (pageChangeSaveTimeoutRef.current !== null) {
+      window.clearTimeout(pageChangeSaveTimeoutRef.current)
+    }
+    pageChangeSaveTimeoutRef.current = window.setTimeout(() => {
+      void savePages(pagesRef.current, cmsStateRef.current)
+        .then(() => {
+          setSaveError(null)
+          markSaved()
+        })
+        .catch(handleStorageError)
+    }, 600)
   }
 
   const clearLayoutFlowHistory = useCallback(() => {
@@ -585,16 +605,20 @@ function App() {
   )
 
   const updateSetting = <K extends keyof CmsSettings>(key: K, value: CmsSettings[K]) => {
-    pulseSavedStatus()
     const nextSettings = { ...settings, [key]: value }
     setSettings(nextSettings)
-    void saveSettings(nextSettings, cmsStateRef.current)
-      .then((saved) => {
-        setSettings(saved)
-        setSaveError(null)
-        markSaved()
-      })
-      .catch(handleStorageError)
+    pulseSavedStatus()
+    if (settingsSaveTimeoutRef.current !== null) {
+      window.clearTimeout(settingsSaveTimeoutRef.current)
+    }
+    settingsSaveTimeoutRef.current = window.setTimeout(() => {
+      void saveSettings(cmsStateRef.current.settings, cmsStateRef.current)
+        .then(() => {
+          setSaveError(null)
+          markSaved()
+        })
+        .catch(handleStorageError)
+    }, 500)
   }
 
   const handleResetSettings = () => {
@@ -607,16 +631,15 @@ function App() {
       if (!ok) {
         return
       }
+      const next = { ...defaultSettings }
+      setSettings(next)
       pulseSavedStatus()
-    const next = { ...defaultSettings }
-    setSettings(next)
-    void saveSettings(next, cmsStateRef.current)
-      .then((saved) => {
-        setSettings(saved)
-        setSaveError(null)
-        markSaved()
-      })
-      .catch(handleStorageError)
+      void saveSettings(next, cmsStateRef.current)
+        .then(() => {
+          setSaveError(null)
+          markSaved()
+        })
+        .catch(handleStorageError)
     })()
   }
 
@@ -757,12 +780,10 @@ function App() {
       const dataUrl = await loadCoverFile(file)
       if (which === 'front') {
         setFrontCover(dataUrl)
-        const saved = await saveFrontCover(dataUrl, cmsStateRef.current)
-        setFrontCover(saved)
+        await saveFrontCover(dataUrl, cmsStateRef.current)
       } else {
         setBackCover(dataUrl)
-        const saved = await saveBackCover(dataUrl, cmsStateRef.current)
-        setBackCover(saved)
+        await saveBackCover(dataUrl, cmsStateRef.current)
       }
       setSaveError(null)
       markSaved()
