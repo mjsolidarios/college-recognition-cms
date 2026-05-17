@@ -259,6 +259,7 @@ function ProgramEditor({
   onLayoutItemSelect?: (itemId: string | null) => void
 }) {
   const sensors = useEditorReorderSensor()
+  const programColumnCardClassName = 'space-y-3 rounded-lg border border-[var(--color-hairline)] bg-white p-3'
   const updateRow = (rowId: string, updater: (row: ProgramRow) => ProgramRow) => {
     onChange({
       ...page,
@@ -304,8 +305,11 @@ function ProgramEditor({
 
         <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
           <div className="space-y-2">
-            {page.content.rows.map((row, index) => (
-              <ReorderableItemCard
+            {page.content.rows.map((row, index) => {
+              const hasRightColumn = row.rightTitle !== undefined || row.rightBody !== undefined
+              const rightColumnToggleId = `program-row-two-column-${row.id}`
+              return (
+                <ReorderableItemCard
                 key={row.id}
                 itemId={row.id}
                 title={row.leftTitle || 'Untitled row'}
@@ -323,12 +327,13 @@ function ProgramEditor({
               }
               >
                 <div className="space-y-3">
-                  <label className="flex items-center justify-between gap-3 rounded-lg border border-[var(--color-hairline)] bg-white px-3 py-2 text-xs font-medium text-[var(--color-body)]">
-                    Two-column row
+                  <div className="flex items-center justify-between gap-3 rounded-lg border border-[var(--color-hairline)] bg-white px-3 py-2 text-xs font-medium text-[var(--color-body)]">
+                    <label htmlFor={rightColumnToggleId}>Two-column row</label>
                     <span className="toggle-switch">
                       <input
+                        id={rightColumnToggleId}
                         type="checkbox"
-                        checked={row.rightTitle !== undefined || row.rightBody !== undefined}
+                        checked={hasRightColumn}
                         onChange={(event) =>
                           updateRow(row.id, (current) =>
                             event.target.checked
@@ -339,10 +344,10 @@ function ProgramEditor({
                       />
                       <span className="toggle-track" />
                     </span>
-                  </label>
+                  </div>
 
                   <div className="grid gap-3 md:grid-cols-2">
-                    <div className="space-y-3 rounded-lg border border-[var(--color-hairline)] bg-white p-3">
+                    <div className={programColumnCardClassName}>
                       <div className="space-y-1.5">
                         <SectionLabel>Left title</SectionLabel>
                         <Input value={row.leftTitle} onChange={(event) => updateRow(row.id, (current) => ({ ...current, leftTitle: event.target.value }))} />
@@ -353,12 +358,12 @@ function ProgramEditor({
                       </div>
                     </div>
 
-                    <div className="space-y-3 rounded-lg border border-[var(--color-hairline)] bg-white p-3">
+                    <div className={programColumnCardClassName}>
                       <div className="space-y-1.5">
                         <SectionLabel>Right title</SectionLabel>
                         <Input
                           value={row.rightTitle ?? ''}
-                          disabled={row.rightTitle === undefined && row.rightBody === undefined}
+                          disabled={!hasRightColumn}
                           onChange={(event) => updateRow(row.id, (current) => ({ ...current, rightTitle: event.target.value }))}
                         />
                       </div>
@@ -366,7 +371,7 @@ function ProgramEditor({
                         <SectionLabel>Right body</SectionLabel>
                         <Textarea
                           value={row.rightBody ?? ''}
-                          disabled={row.rightTitle === undefined && row.rightBody === undefined}
+                          disabled={!hasRightColumn}
                           onChange={(event) => updateRow(row.id, (current) => ({ ...current, rightBody: event.target.value }))}
                         />
                       </div>
@@ -374,7 +379,8 @@ function ProgramEditor({
                   </div>
                 </div>
               </ReorderableItemCard>
-            ))}
+              )
+            })}
           </div>
         </DndContext>
         <AddButton
