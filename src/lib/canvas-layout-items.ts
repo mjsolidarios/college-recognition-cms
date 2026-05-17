@@ -37,7 +37,8 @@ export function placementFromFlow(
   const pageSpan = columnHeight * columnsPerPageForType(pageType)
   const localPageIndex = Math.floor(safeFlow / pageSpan)
   const withinPage = safeFlow - localPageIndex * pageSpan
-  const column = (pageType === 'program' ? 0 : withinPage >= columnHeight ? 1 : 0) as 0 | 1
+  const flowColumn = pageType === 'program' ? 0 : withinPage >= columnHeight ? 1 : 0
+  const column = flowColumn as 0 | 1
   const y = contentTop + withinPage - (column === 1 ? columnHeight : 0)
   return { localPageIndex, column, y }
 }

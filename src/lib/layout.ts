@@ -952,7 +952,8 @@ function renderProgramRow(context: LayoutContext, row: ProgramRow, index: number
   const hasRightColumn = row.rightTitle !== undefined || row.rightBody !== undefined
   const rowTop = context.currentY[0]
   context.currentColumn = 0
-  context.currentY = [rowTop, rowTop]
+  context.currentY[0] = rowTop
+  context.currentY[1] = rowTop
 
   const renderColumnParts = (
     parts: Array<{ type: 'title' | 'body'; text: string }>,
@@ -1026,7 +1027,8 @@ function renderProgramRow(context: LayoutContext, row: ProgramRow, index: number
 
   const rowBottom = hasRightColumn ? Math.max(context.currentY[0], context.currentY[1]) : context.currentY[0]
   context.currentColumn = 0
-  context.currentY = [rowBottom, rowBottom]
+  context.currentY[0] = rowBottom
+  context.currentY[1] = rowBottom
 }
 
 function renderProgramPage(context: LayoutContext, rows: ProgramRow[]) {
