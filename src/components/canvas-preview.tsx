@@ -690,17 +690,17 @@ export function CanvasPreview({
           <Button
             type="button"
             variant="ghost"
-            size="sm"
-            className="h-7 px-2 text-[11px] text-[var(--color-body)]"
+            size="icon"
+            className="size-7 text-[var(--color-body)]"
             disabled={!currentSlot}
             onClick={() => void handleCopyAsFigmaLayout()}
-            title="Copy the current preview as an SVG layout for Figma"
+            title={figmaCopyState === 'copied' ? 'Copied!' : figmaCopyState === 'error' ? 'Copy failed' : 'Copy Figma Layout'}
+            aria-label={figmaCopyState === 'copied' ? 'Copied!' : figmaCopyState === 'error' ? 'Copy failed' : 'Copy Figma Layout'}
             aria-live="polite"
           >
             {figmaCopyState === 'copied'
-              ? <Check aria-hidden className="mr-1 size-3.5 shrink-0 text-emerald-600" />
-              : <ClipboardCopy aria-hidden className="mr-1 size-3.5 shrink-0" />}
-            <span>{figmaCopyState === 'copied' ? 'Copied' : figmaCopyState === 'error' ? 'Copy failed' : 'Copy Figma Layout'}</span>
+              ? <Check aria-hidden className="size-3.5 shrink-0 text-emerald-600" />
+              : <ClipboardCopy aria-hidden className="size-3.5 shrink-0" />}
           </Button>
         </div>
 
@@ -745,13 +745,13 @@ export function CanvasPreview({
           <Button
             type="button"
             variant="ghost"
-            size="sm"
-            className="h-7 px-2 text-[11px] text-[var(--color-body)]"
+            size="icon"
+            className="size-7 text-[var(--color-body)]"
             onClick={resetView}
             title="Reset zoom and pan"
+            aria-label="Reset zoom and pan"
           >
-            <RotateCcw className="mr-1 size-3.5 shrink-0" />
-            Reset view
+            <RotateCcw className="size-3.5 shrink-0" />
           </Button>
           {!showHints ? (
             <Button
