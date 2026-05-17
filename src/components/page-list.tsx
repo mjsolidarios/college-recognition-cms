@@ -8,8 +8,8 @@ import type { CmsPage, PageType } from '@/types/cms'
 const PAGE_TYPE_CONFIG: Record<PageType, { label: string; color: string; bgColor: string; borderColor: string; icon: typeof FileText }> = {
   core: { label: 'Core', color: 'text-[rgb(var(--type-core))]', bgColor: 'bg-[rgb(var(--type-core)/0.12)]', borderColor: 'border-[rgb(var(--type-core)/0.35)]', icon: FileText },
   program: { label: 'Program', color: 'text-[rgb(var(--type-program))]', bgColor: 'bg-[rgb(var(--type-program)/0.12)]', borderColor: 'border-[rgb(var(--type-program)/0.35)]', icon: LayoutList },
-  academic: { label: 'Academic', color: 'text-[rgb(var(--type-academic))]', bgColor: 'bg-[rgb(var(--type-academic)/0.12)]', borderColor: 'border-[rgb(var(--type-academic)/0.35)]', icon: Medal },
-  'non-academic': { label: 'Non-Academic', color: 'text-[rgb(var(--type-non-academic))]', bgColor: 'bg-[rgb(var(--type-non-academic)/0.12)]', borderColor: 'border-[rgb(var(--type-non-academic)/0.35)]', icon: Star },
+  academic: { label: 'Acad', color: 'text-[rgb(var(--type-academic))]', bgColor: 'bg-[rgb(var(--type-academic)/0.12)]', borderColor: 'border-[rgb(var(--type-academic)/0.35)]', icon: Medal },
+  'non-academic': { label: 'Non-Acad', color: 'text-[rgb(var(--type-non-academic))]', bgColor: 'bg-[rgb(var(--type-non-academic)/0.12)]', borderColor: 'border-[rgb(var(--type-non-academic)/0.35)]', icon: Star },
 }
 const PAGE_TYPE_ORDER: PageType[] = ['core', 'program', 'academic', 'non-academic']
 
@@ -164,20 +164,21 @@ export function PageList({
         collapsed && 'items-center',
       )}
     >
-      <div className={cn('border-b border-[var(--color-hairline-soft)]', collapsed ? 'w-full px-3 py-3' : 'px-4 py-3')}>
+      <div className={cn('border-b border-[var(--color-hairline-soft)]', collapsed ? 'w-full px-2 py-2' : 'px-4 py-3')}>
         <div className={cn('flex items-start gap-3', collapsed ? 'justify-center' : 'justify-between')}>
-          <div className={cn('min-w-0', collapsed && 'flex flex-col items-center text-center')}>
-            <h2 className="text-sm font-semibold text-[var(--color-ink)]">Pages</h2>
-            <p className="text-xs text-[var(--color-muted)]">
-              {pages.length} page{pages.length !== 1 ? 's' : ''}
-              {!collapsed && ' · drag to reorder'}
-            </p>
-            {!collapsed && activePage ? (
-              <p className="mt-1 truncate text-[11px] text-[var(--color-muted-soft)]">
-                Active: <span className="font-medium text-[var(--color-body)]">{activePage.title}</span>
+          {!collapsed ? (
+            <div className="min-w-0">
+              <h2 className="text-sm font-semibold text-[var(--color-ink)]">Pages</h2>
+              <p className="text-xs text-[var(--color-muted)]">
+                {pages.length} page{pages.length !== 1 ? 's' : ''} · drag to reorder
               </p>
-            ) : null}
-          </div>
+              {activePage ? (
+                <p className="mt-1 truncate text-[11px] text-[var(--color-muted-soft)]">
+                  Active: <span className="font-medium text-[var(--color-body)]">{activePage.title}</span>
+                </p>
+              ) : null}
+            </div>
+          ) : null}
           {allowCollapse ? (
             <Button
               type="button"

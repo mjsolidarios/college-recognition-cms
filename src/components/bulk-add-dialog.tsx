@@ -1,8 +1,16 @@
-import * as Dialog from '@radix-ui/react-dialog'
 import { ListPlus, X } from 'lucide-react'
 import { useState } from 'react'
 
 import { Button } from '@/components/ui/button'
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import type { AcademicEntry, NonAcademicEntry } from '@/types/cms'
@@ -20,26 +28,23 @@ function Shell({ open, onOpenChange, trigger, title, desc, children }: {
   title: string; desc: string; children: React.ReactNode
 }) {
   return (
-    <Dialog.Root open={open} onOpenChange={onOpenChange}>
-      <Dialog.Trigger asChild>{trigger}</Dialog.Trigger>
-      <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-50 bg-black/30 animate-fade-in" />
-        <Dialog.Content className="fixed left-1/2 top-1/2 z-50 w-[95vw] max-w-lg -translate-x-1/2 -translate-y-1/2 rounded-xl border border-[var(--color-hairline)] bg-white p-5 animate-scale-in">
-          <div className="flex items-start justify-between gap-3 mb-4">
-            <div>
-              <Dialog.Title className="text-sm font-semibold text-[var(--color-ink)]">{title}</Dialog.Title>
-              <Dialog.Description className="mt-0.5 text-xs text-[var(--color-muted)]">{desc}</Dialog.Description>
-            </div>
-            <Dialog.Close asChild>
-              <Button type="button" variant="ghost" size="icon" className="size-7 flex-shrink-0 text-[var(--color-muted)]">
-                <X className="size-4" />
-              </Button>
-            </Dialog.Close>
-          </div>
-          {children}
-        </Dialog.Content>
-      </Dialog.Portal>
-    </Dialog.Root>
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogTrigger asChild>{trigger}</DialogTrigger>
+      <DialogContent showClose={false}>
+        <div className="flex items-start justify-between gap-3">
+          <DialogHeader className="pr-0">
+            <DialogTitle>{title}</DialogTitle>
+            <DialogDescription>{desc}</DialogDescription>
+          </DialogHeader>
+          <DialogClose asChild>
+            <Button type="button" variant="ghost" size="icon" className="size-7 flex-shrink-0 text-[var(--color-muted)]">
+              <X className="size-4" />
+            </Button>
+          </DialogClose>
+        </div>
+        {children}
+      </DialogContent>
+    </Dialog>
   )
 }
 
@@ -80,7 +85,7 @@ export function BulkAddAcademicDialog({ onAdd }: { onAdd: (e: AcademicEntry[]) =
           <Textarea value={namesRaw} onChange={(e) => setNamesRaw(e.target.value)} placeholder={'Von Ashley P. Chichirita\nJames Joseph L. Cuadra\nLyka L. Lamigo'} className="min-h-36 font-mono text-xs" />
         </div>
         <div className="flex justify-end gap-2 pt-1">
-          <Dialog.Close asChild><Button type="button" variant="outline" size="sm">Cancel</Button></Dialog.Close>
+          <DialogClose asChild><Button type="button" variant="outline" size="sm">Cancel</Button></DialogClose>
           <Button type="button" size="sm" disabled={!count} onClick={submit} className="border-[#1f8a65] bg-[#1f8a65] text-white hover:border-[#1a7456] hover:bg-[#1a7456]"><ListPlus className="size-3.5" />Add {count} awardee{count !== 1 ? 's' : ''}</Button>
         </div>
       </div>
@@ -123,7 +128,7 @@ export function BulkAddNonAcademicDialog({ onAdd }: { onAdd: (e: NonAcademicEntr
           <Textarea value={namesRaw} onChange={(e) => setNamesRaw(e.target.value)} placeholder={'Kyla B. Bearneza\nReeman L. Singh'} className="min-h-36 font-mono text-xs" />
         </div>
         <div className="flex justify-end gap-2 pt-1">
-          <Dialog.Close asChild><Button type="button" variant="outline" size="sm">Cancel</Button></Dialog.Close>
+          <DialogClose asChild><Button type="button" variant="outline" size="sm">Cancel</Button></DialogClose>
           <Button type="button" size="sm" disabled={!count} onClick={submit} className="bg-rose-600 text-white hover:bg-rose-500"><ListPlus className="size-3.5" />Add {count} award{count !== 1 ? 's' : ''}</Button>
         </div>
       </div>

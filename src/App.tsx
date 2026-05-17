@@ -14,6 +14,7 @@ import {
 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
+import { useConfirm } from '@/components/confirm-provider'
 import { CanvasPreview } from '@/components/canvas-preview'
 import { ExportDialog, ImportDialog } from '@/components/import-export-dialog'
 import { PageEditor } from '@/components/page-editor'
@@ -232,6 +233,7 @@ const waitForUiUpdate = () =>
   new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())))
 
 function App() {
+  const { confirm, alert } = useConfirm()
   const supabaseConfigError = getSupabaseConfigError()
   const [isHydrated, setIsHydrated] = useState(false)
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -517,20 +519,30 @@ function App() {
   }
 
   const handleDeletePage = (pageId: string) => {
-    if (pages.length <= 1) {
-      window.alert('Cannot delete the last page. Add a new page before deleting this one.')
-      return
-    }
-    const page = pages.find((entry) => entry.id === pageId)
-    const ok = window.confirm(`Delete "${page?.title ?? 'this page'}"? This action cannot be undone.`)
-    if (!ok) {
-      return
-    }
-    const nextPages = pages
-      .filter((entry) => entry.id !== pageId)
-      .map((page, index) => ({ ...page, order: index }))
-    persistPages(nextPages)
-    setActivePageId((current) => (current === pageId ? nextPages[0]?.id ?? '' : current))
+    void (async () => {
+      if (pages.length <= 1) {
+        await alert({
+          title: 'Cannot delete page',
+          description: 'Add a new page before deleting this one.',
+        })
+        return
+      }
+      const page = pages.find((entry) => entry.id === pageId)
+      const ok = await confirm({
+        title: 'Delete page?',
+        description: `Delete "${page?.title ?? 'this page'}"? This action cannot be undone.`,
+        confirmLabel: 'Delete',
+        destructive: true,
+      })
+      if (!ok) {
+        return
+      }
+      const nextPages = pages
+        .filter((entry) => entry.id !== pageId)
+        .map((page, index) => ({ ...page, order: index }))
+      persistPages(nextPages)
+      setActivePageId((current) => (current === pageId ? nextPages[0]?.id ?? '' : current))
+    })()
   }
 
   const handleReorder = (activeId: string, overId: string) => {
@@ -586,11 +598,16 @@ function App() {
   }
 
   const handleResetSettings = () => {
-    const ok = window.confirm('Reset all settings to defaults? Page content and title will not be changed.')
-    if (!ok) {
-      return
-    }
-    pulseSavedStatus()
+    void (async () => {
+      const ok = await confirm({
+        title: 'Reset settings?',
+        description: 'Restore typography, layout, and display options to their defaults. Page content and title will not be changed.',
+        confirmLabel: 'Reset settings',
+      })
+      if (!ok) {
+        return
+      }
+      pulseSavedStatus()
     const next = { ...defaultSettings }
     setSettings(next)
     void saveSettings(next, cmsStateRef.current)
@@ -600,23 +617,31 @@ function App() {
         markSaved()
       })
       .catch(handleStorageError)
+    })()
   }
 
   const handleReset = () => {
-    const ok = window.confirm('Reset the entire document to seed content? This removes custom pages, settings, and covers.')
-    if (!ok) {
-      return
-    }
-    pulseSavedStatus()
-    clearLayoutFlowHistory()
-    void resetCmsDocument()
-      .then((state) => {
-        applyLoadedState(state)
-        setPreviewPageIndex(0)
-        setSaveError(null)
-        markSaved()
+    void (async () => {
+      const ok = await confirm({
+        title: 'Reset document?',
+        description: 'Reset the entire document to seed content? This removes custom pages, settings, and covers.',
+        confirmLabel: 'Reset document',
+        destructive: true,
       })
-      .catch(handleStorageError)
+      if (!ok) {
+        return
+      }
+      pulseSavedStatus()
+      clearLayoutFlowHistory()
+      void resetCmsDocument()
+        .then((state) => {
+          applyLoadedState(state)
+          setPreviewPageIndex(0)
+          setSaveError(null)
+          markSaved()
+        })
+        .catch(handleStorageError)
+    })()
   }
 
   const handleExportPdf = async () => {
