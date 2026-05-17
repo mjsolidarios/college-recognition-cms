@@ -959,7 +959,7 @@ function renderProgramRow(context: LayoutContext, row: ProgramRow, index: number
     pinColumn: 0 | 1,
     fullWidth: boolean,
   ) => {
-    const flowOptions = fullWidth ? { fullWidth: true, pinColumn } : { pinColumn }
+    const flowOptions = { fullWidth, pinColumn }
 
     for (let partIndex = 0; partIndex < parts.length; partIndex += 1) {
       const part = parts[partIndex]
