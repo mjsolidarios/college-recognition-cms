@@ -454,7 +454,7 @@ function App() {
     }, 600)
   }
 
-  const clearHistory = useCallback(() => {
+  const clearUndoRedoHistory = useCallback(() => {
     setUndoStack([])
     setRedoStack([])
   }, [])
@@ -673,7 +673,7 @@ function App() {
         return
       }
       pulseSavedStatus()
-      clearHistory()
+      clearUndoRedoHistory()
       void resetCmsDocument()
         .then((state) => {
           applyLoadedState(state)

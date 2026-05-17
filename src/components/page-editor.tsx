@@ -346,26 +346,36 @@ function ProgramEditor({
                               return
                             }
                             const hasRightContent = Boolean(row.rightTitle?.trim() || row.rightBody?.trim())
-                            if (hasRightContent && onPageMutation) {
+                            if (hasRightContent) {
                               const rowIndex = page.content.rows.findIndex((r) => r.id === row.id)
-                              const singleColumnRow: ProgramRow = { ...row, rightTitle: undefined, rightBody: undefined }
-                              const spillRow: ProgramRow = {
-                                id: crypto.randomUUID(),
-                                leftTitle: row.rightTitle ?? '',
-                                leftBody: row.rightBody ?? '',
+                              if (rowIndex === -1) {
+                                updateRow(row.id, (current) => ({
+                                  ...current,
+                                  rightTitle: undefined,
+                                  rightBody: undefined,
+                                }))
+                                return
                               }
-                              const newRows = [
-                                ...page.content.rows.slice(0, rowIndex),
-                                singleColumnRow,
-                                spillRow,
-                                ...page.content.rows.slice(rowIndex + 1),
-                              ]
-                              const afterPage: ProgramPage = {
-                                ...page,
-                                content: { ...page.content, rows: newRows },
+                              if (onPageMutation) {
+                                const singleColumnRow: ProgramRow = { ...row, rightTitle: undefined, rightBody: undefined }
+                                const spillRow: ProgramRow = {
+                                  id: crypto.randomUUID(),
+                                  leftTitle: row.rightTitle ?? '',
+                                  leftBody: row.rightBody ?? '',
+                                }
+                                const newRows = [
+                                  ...page.content.rows.slice(0, rowIndex),
+                                  singleColumnRow,
+                                  spillRow,
+                                  ...page.content.rows.slice(rowIndex + 1),
+                                ]
+                                const afterPage: ProgramPage = {
+                                  ...page,
+                                  content: { ...page.content, rows: newRows },
+                                }
+                                onPageMutation(page, afterPage)
+                                return
                               }
-                              onPageMutation(page, afterPage)
-                              return
                             }
                             updateRow(row.id, (current) => ({
                               ...current,
