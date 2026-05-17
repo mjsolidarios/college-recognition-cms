@@ -22,6 +22,16 @@ export const FONT_OPTIONS: { value: FontPreset; label: string; description: stri
     description: 'Friendly geometric sans-serif for contemporary layouts',
   },
   {
+    value: 'source-sans-3',
+    label: 'Source Sans 3',
+    description: 'Versatile sans-serif from Google Fonts for readable body copy',
+  },
+  {
+    value: 'nunito-sans',
+    label: 'Nunito Sans',
+    description: 'Rounded sans-serif from Google Fonts with a softer tone',
+  },
+  {
     value: 'times',
     label: 'Times',
     description: 'Classic serif for comfortable reading',
@@ -41,6 +51,16 @@ export const FONT_OPTIONS: { value: FontPreset; label: string; description: stri
     label: 'Playfair Display',
     description: 'Elegant serif suited for formal titles and highlights',
   },
+  {
+    value: 'libre-baskerville',
+    label: 'Libre Baskerville',
+    description: 'Traditional serif from Google Fonts for formal long-form text',
+  },
+  {
+    value: 'cormorant-garamond',
+    label: 'Cormorant Garamond',
+    description: 'Display-friendly serif from Google Fonts with refined contrast',
+  },
 ]
 
 export function getFontStack(font: FontPreset) {
@@ -53,6 +73,10 @@ export function getFontStack(font: FontPreset) {
       return 'Montserrat, "Helvetica Neue", Helvetica, Arial, sans-serif'
     case 'poppins':
       return 'Poppins, "Helvetica Neue", Helvetica, Arial, sans-serif'
+    case 'source-sans-3':
+      return '"Source Sans 3", "Helvetica Neue", Helvetica, Arial, sans-serif'
+    case 'nunito-sans':
+      return '"Nunito Sans", "Helvetica Neue", Helvetica, Arial, sans-serif'
     case 'times':
       return 'Georgia, "Times New Roman", serif'
     case 'lora':
@@ -61,5 +85,9 @@ export function getFontStack(font: FontPreset) {
       return 'Merriweather, Georgia, "Times New Roman", serif'
     case 'playfair-display':
       return '"Playfair Display", Georgia, "Times New Roman", serif'
+    case 'libre-baskerville':
+      return '"Libre Baskerville", Georgia, "Times New Roman", serif'
+    case 'cormorant-garamond':
+      return '"Cormorant Garamond", Georgia, "Times New Roman", serif'
   }
 }

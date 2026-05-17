@@ -47,6 +47,8 @@ function pdfFontFamily(fontFamily: RenderTextBlock['fontFamily']) {
     case 'lora':
     case 'merriweather':
     case 'playfair-display':
+    case 'libre-baskerville':
+    case 'cormorant-garamond':
       return 'times'
     default:
       return 'helvetica'

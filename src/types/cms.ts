@@ -8,9 +8,13 @@ export type FontPreset =
   | 'inter'
   | 'montserrat'
   | 'poppins'
+  | 'source-sans-3'
+  | 'nunito-sans'
   | 'lora'
   | 'merriweather'
   | 'playfair-display'
+  | 'libre-baskerville'
+  | 'cormorant-garamond'
 
 export interface ProgramRow {
   id: string
