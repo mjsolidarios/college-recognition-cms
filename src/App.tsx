@@ -33,8 +33,19 @@ import {
 } from '@/lib/layout-item-flow'
 import { previewSlotIndexForLayoutItem, previewSlotIndexForPageId } from '@/lib/preview-navigation'
 import { renderDocument } from '@/lib/layout'
-import { defaultSettings, seedPages } from '@/lib/sample-data'
-import { deletePage, getPages, getSettings, savePage, saveSettings, getFrontCover, saveFrontCover, getBackCover, saveBackCover } from '@/lib/storage'
+import { defaultSettings } from '@/lib/sample-data'
+import { getSupabaseConfigError } from '@/lib/supabase'
+import {
+  loadCmsState,
+  resetCmsDocument,
+  saveBackCover,
+  saveCmsState,
+  saveDocumentTitle,
+  saveFrontCover,
+  savePages,
+  saveSettings,
+  type CmsState,
+} from '@/lib/storage'
 import { progressPercent, type PdfExportProgress } from '@/lib/pdf-worker-protocol'
 import type { CmsPage, CmsSettings, FontPreset, PageType } from '@/types/cms'
 import { PAGE_WIDTH, PAGE_HEIGHT } from '@/types/cms'
@@ -63,8 +74,6 @@ function createBlankPage(pageType: PageType, order: number): CmsPage {
               id: crypto.randomUUID(),
               leftTitle: 'Opening number',
               leftBody: 'Describe the opening sequence.',
-              rightTitle: 'Support details',
-              rightBody: 'Use this column for presenters, awarders, or notes.',
             },
           ],
         },
@@ -222,12 +231,15 @@ const waitForUiUpdate = () =>
   new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())))
 
 function App() {
-  const [pages, setPages] = useState<CmsPage[]>(() => getPages())
-  const [settings, setSettings] = useState<CmsSettings>(() => getSettings())
-  const [activePageId, setActivePageId] = useState(() => getPages()[0]?.id ?? '')
+  const supabaseConfigError = getSupabaseConfigError()
+  const [isHydrated, setIsHydrated] = useState(false)
+  const [loadError, setLoadError] = useState<string | null>(null)
+  const [pages, setPages] = useState<CmsPage[]>([])
+  const [settings, setSettings] = useState<CmsSettings>(defaultSettings)
+  const [activePageId, setActivePageId] = useState('')
   const [documentTitle, setDocumentTitle] = useState('College Recognition Program')
-  const [frontCover, setFrontCover] = useState<string | null>(() => getFrontCover())
-  const [backCover, setBackCover] = useState<string | null>(() => getBackCover())
+  const [frontCover, setFrontCover] = useState<string | null>(null)
+  const [backCover, setBackCover] = useState<string | null>(null)
   const [isExporting, setIsExporting] = useState(false)
   const [pdfExportProgress, setPdfExportProgress] = useState<PdfExportProgress | null>(null)
   const [mobileTab, setMobileTab] = useState<MobileTab>('canvas')
@@ -239,10 +251,21 @@ function App() {
   const [layoutFlowUndo, setLayoutFlowUndo] = useState<LayoutItemFlowReflowCommand[]>([])
   const [layoutFlowRedo, setLayoutFlowRedo] = useState<LayoutItemFlowReflowCommand[]>([])
   const [focusedLayoutItemId, setFocusedLayoutItemId] = useState<string | null>(null)
-  const [saveStatus, setSaveStatus] = useState<'saving' | 'saved'>('saved')
+  const [saveStatus, setSaveStatus] = useState<'saving' | 'saved' | 'error'>('saved')
+  const [saveError, setSaveError] = useState<string | null>(null)
   const pagesRef = useRef(pages)
+  const cmsStateRef = useRef<CmsState>({
+    pages: [],
+    settings: defaultSettings,
+    documentTitle: 'College Recognition Program',
+    frontCover: null,
+    backCover: null,
+  })
   const saveStatusTimeoutRef = useRef<number | null>(null)
+  const documentTitleSaveTimeoutRef = useRef<number | null>(null)
+  const lastSavedTitleRef = useRef<string | null>(null)
   pagesRef.current = pages
+  cmsStateRef.current = { pages, settings, documentTitle, frontCover, backCover }
 
   const activePage = useMemo(
     () => pages.find((page) => page.id === activePageId) ?? pages[0],
@@ -257,17 +280,55 @@ function App() {
     warmPdfExportWorker()
   }, [])
 
+  useEffect(() => {
+    if (supabaseConfigError) {
+      return
+    }
+
+    let cancelled = false
+
+    void loadCmsState()
+      .then((state) => {
+        if (cancelled) {
+          return
+        }
+        setPages(state.pages)
+        setSettings(state.settings)
+        setDocumentTitle(state.documentTitle)
+        setFrontCover(state.frontCover)
+        setBackCover(state.backCover)
+        setActivePageId(state.pages[0]?.id ?? '')
+        lastSavedTitleRef.current = state.documentTitle
+        setLoadError(null)
+        setIsHydrated(true)
+      })
+      .catch((error: unknown) => {
+        if (cancelled) {
+          return
+        }
+        const message = error instanceof Error ? error.message : 'Failed to load document from Supabase.'
+        setLoadError(message)
+        setIsHydrated(true)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [supabaseConfigError])
+
   useEffect(
     () => () => {
       if (saveStatusTimeoutRef.current !== null) {
         window.clearTimeout(saveStatusTimeoutRef.current)
       }
+      if (documentTitleSaveTimeoutRef.current !== null) {
+        window.clearTimeout(documentTitleSaveTimeoutRef.current)
+      }
     },
     [],
   )
 
-  const pulseSavedStatus = useCallback(() => {
-    setSaveStatus('saving')
+  const markSaved = useCallback(() => {
     if (saveStatusTimeoutRef.current !== null) {
       window.clearTimeout(saveStatusTimeoutRef.current)
     }
@@ -275,6 +336,67 @@ function App() {
       setSaveStatus('saved')
     }, 260)
   }, [])
+
+  const pulseSavedStatus = useCallback(() => {
+    setSaveStatus('saving')
+    setSaveError(null)
+  }, [])
+
+  const handleStorageError = useCallback((error: unknown) => {
+    const message = error instanceof Error ? error.message : 'Failed to save to Supabase.'
+    setSaveStatus('error')
+    setSaveError(message)
+  }, [])
+
+  const applyLoadedState = useCallback((state: CmsState) => {
+    setPages(state.pages)
+    setSettings(state.settings)
+    setDocumentTitle(state.documentTitle)
+    lastSavedTitleRef.current = state.documentTitle
+    setFrontCover(state.frontCover)
+    setBackCover(state.backCover)
+    setActivePageId((current) => {
+      if (current && state.pages.some((page) => page.id === current)) {
+        return current
+      }
+      return state.pages[0]?.id ?? ''
+    })
+  }, [])
+
+  useEffect(() => {
+    if (!isHydrated || supabaseConfigError) {
+      return
+    }
+    if (lastSavedTitleRef.current !== null && documentTitle === lastSavedTitleRef.current) {
+      return
+    }
+
+    if (documentTitleSaveTimeoutRef.current !== null) {
+      window.clearTimeout(documentTitleSaveTimeoutRef.current)
+    }
+
+    documentTitleSaveTimeoutRef.current = window.setTimeout(() => {
+      pulseSavedStatus()
+      void saveDocumentTitle(documentTitle, cmsStateRef.current)
+        .then((savedTitle) => {
+          lastSavedTitleRef.current = savedTitle
+          setSaveError(null)
+          setDocumentTitle(savedTitle)
+          markSaved()
+        })
+        .catch((error: unknown) => {
+          const message = error instanceof Error ? error.message : 'Failed to save document title.'
+          setSaveStatus('error')
+          setSaveError(message)
+        })
+    }, 450)
+
+    return () => {
+      if (documentTitleSaveTimeoutRef.current !== null) {
+        window.clearTimeout(documentTitleSaveTimeoutRef.current)
+      }
+    }
+  }, [documentTitle, isHydrated, supabaseConfigError, markSaved, pulseSavedStatus])
 
   useEffect(() => {
     if (!activePage || !focusedLayoutItemId || !pageContainsLayoutItem(activePage, focusedLayoutItemId)) {
@@ -292,12 +414,15 @@ function App() {
   const persistPages = (nextPages: CmsPage[]) => {
     pulseSavedStatus()
     const orderedPages = [...nextPages].sort((left, right) => left.order - right.order)
-    let persistedPages = orderedPages
-    orderedPages.forEach((page) => {
-      persistedPages = savePage(page)
-    })
-    setPages(persistedPages)
-    setActivePageId((current) => current || persistedPages[0]?.id || '')
+    setPages(orderedPages)
+    void savePages(orderedPages, cmsStateRef.current)
+      .then((persistedPages) => {
+        setPages(persistedPages)
+        setSaveError(null)
+        setActivePageId((current) => current || persistedPages[0]?.id || '')
+        markSaved()
+      })
+      .catch(handleStorageError)
   }
 
   const handlePageChange = (page: CmsPage) => {
@@ -399,7 +524,9 @@ function App() {
     if (!ok) {
       return
     }
-    const nextPages = deletePage(pageId).map((page, index) => ({ ...page, order: index }))
+    const nextPages = pages
+      .filter((entry) => entry.id !== pageId)
+      .map((page, index) => ({ ...page, order: index }))
     persistPages(nextPages)
     setActivePageId((current) => (current === pageId ? nextPages[0]?.id ?? '' : current))
   }
@@ -446,7 +573,14 @@ function App() {
   const updateSetting = <K extends keyof CmsSettings>(key: K, value: CmsSettings[K]) => {
     pulseSavedStatus()
     const nextSettings = { ...settings, [key]: value }
-    setSettings(saveSettings(nextSettings))
+    setSettings(nextSettings)
+    void saveSettings(nextSettings, cmsStateRef.current)
+      .then((saved) => {
+        setSettings(saved)
+        setSaveError(null)
+        markSaved()
+      })
+      .catch(handleStorageError)
   }
 
   const handleResetSettings = () => {
@@ -456,7 +590,14 @@ function App() {
     }
     pulseSavedStatus()
     const next = { ...defaultSettings }
-    setSettings(saveSettings(next))
+    setSettings(next)
+    void saveSettings(next, cmsStateRef.current)
+      .then((saved) => {
+        setSettings(saved)
+        setSaveError(null)
+        markSaved()
+      })
+      .catch(handleStorageError)
   }
 
   const handleReset = () => {
@@ -466,17 +607,14 @@ function App() {
     }
     pulseSavedStatus()
     clearLayoutFlowHistory()
-    pages.forEach((page) => {
-      deletePage(page.id)
-    })
-    persistPages(seedPages)
-    setSettings(saveSettings(defaultSettings))
-    setActivePageId(seedPages[0].id)
-    setPreviewPageIndex(0)
-    saveFrontCover(null)
-    setFrontCover(null)
-    saveBackCover(null)
-    setBackCover(null)
+    void resetCmsDocument()
+      .then((state) => {
+        applyLoadedState(state)
+        setPreviewPageIndex(0)
+        setSaveError(null)
+        markSaved()
+      })
+      .catch(handleStorageError)
   }
 
   const handleExportPdf = async () => {
@@ -506,27 +644,29 @@ function App() {
     exportSvgDocument([page], documentTitle, frontCover, backCover)
   }
 
-  const handleImport = (importedPages: CmsPage[], importedSettings?: CmsSettings, importedTitle?: string, importedFrontCover?: string | null, importedBackCover?: string | null) => {
+  const handleImport = (
+    importedPages: CmsPage[],
+    importedSettings?: CmsSettings,
+    importedTitle?: string,
+    importedFrontCover?: string | null,
+    importedBackCover?: string | null,
+  ) => {
     pulseSavedStatus()
-    // Clear existing pages from storage first
-    pages.forEach((page) => deletePage(page.id))
-    persistPages(importedPages)
-    if (importedSettings) {
-      setSettings(saveSettings(importedSettings))
+    const nextState: CmsState = {
+      pages: [...importedPages].sort((left, right) => left.order - right.order),
+      settings: importedSettings ? { ...defaultSettings, ...importedSettings } : settings,
+      documentTitle: importedTitle ?? documentTitle,
+      frontCover: importedFrontCover !== undefined ? importedFrontCover : frontCover,
+      backCover: importedBackCover !== undefined ? importedBackCover : backCover,
     }
-    if (importedTitle) {
-      setDocumentTitle(importedTitle)
-    }
-    if (importedFrontCover !== undefined) {
-      saveFrontCover(importedFrontCover)
-      setFrontCover(importedFrontCover)
-    }
-    if (importedBackCover !== undefined) {
-      saveBackCover(importedBackCover)
-      setBackCover(importedBackCover)
-    }
-    setActivePageId(importedPages[0]?.id ?? '')
-    setPreviewPageIndex(0)
+    void saveCmsState(nextState)
+      .then((saved) => {
+        applyLoadedState(saved)
+        setPreviewPageIndex(0)
+        setSaveError(null)
+        markSaved()
+      })
+      .catch(handleStorageError)
   }
 
   /* ── Resize drag handle ─────────────────────────────────── */
@@ -589,25 +729,44 @@ function App() {
     try {
       const dataUrl = await loadCoverFile(file)
       if (which === 'front') {
-        saveFrontCover(dataUrl)
         setFrontCover(dataUrl)
+        const saved = await saveFrontCover(dataUrl, cmsStateRef.current)
+        setFrontCover(saved)
       } else {
-        saveBackCover(dataUrl)
         setBackCover(dataUrl)
+        const saved = await saveBackCover(dataUrl, cmsStateRef.current)
+        setBackCover(saved)
       }
-    } catch {
-      setCoverUploadError('Failed to load the image. Please try a different file.')
+      setSaveError(null)
+      markSaved()
+    } catch (error: unknown) {
+      if (error instanceof Error && error.message.includes('Supabase')) {
+        handleStorageError(error)
+      } else {
+        setCoverUploadError('Failed to load the image. Please try a different file.')
+        setSaveStatus('saved')
+      }
     }
   }
 
   const handleCoverClear = (which: 'front' | 'back') => {
     pulseSavedStatus()
     if (which === 'front') {
-      saveFrontCover(null)
       setFrontCover(null)
+      void saveFrontCover(null, cmsStateRef.current)
+        .then(() => {
+          setSaveError(null)
+          markSaved()
+        })
+        .catch(handleStorageError)
     } else {
-      saveBackCover(null)
       setBackCover(null)
+      void saveBackCover(null, cmsStateRef.current)
+        .then(() => {
+          setSaveError(null)
+          markSaved()
+        })
+        .catch(handleStorageError)
     }
   }
 
@@ -890,6 +1049,45 @@ function App() {
     </Tabs>
   )
 
+  if (supabaseConfigError) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-[var(--surface-app)] px-4">
+        <div className="max-w-md rounded-xl border border-[var(--color-hairline)] bg-white p-6 text-center">
+          <h1 className="text-sm font-semibold text-[var(--color-ink)]">Supabase not configured</h1>
+          <p className="mt-2 text-xs leading-relaxed text-[var(--color-muted)]">{supabaseConfigError}</p>
+          <p className="mt-3 text-xs text-[var(--color-muted)]">
+            Run the SQL in <code className="rounded bg-[var(--surface-canvas)] px-1">supabase/migrations/20250517000000_cms_documents.sql</code> in your Supabase project, then restart the dev server.
+          </p>
+        </div>
+      </div>
+    )
+  }
+
+  if (!isHydrated) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-[var(--surface-app)]">
+        <div className="flex items-center gap-2 text-sm text-[var(--color-muted)]">
+          <Loader2 className="size-4 animate-spin text-[var(--color-primary)]" />
+          Loading document from Supabase…
+        </div>
+      </div>
+    )
+  }
+
+  if (loadError) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-[var(--surface-app)] px-4">
+        <div className="max-w-md rounded-xl border border-red-200 bg-red-50 p-6 text-center">
+          <h1 className="text-sm font-semibold text-red-800">Could not load document</h1>
+          <p className="mt-2 text-xs leading-relaxed text-red-700">{loadError}</p>
+          <p className="mt-3 text-xs text-red-600">
+            Confirm the <code className="rounded bg-white/80 px-1">cms_documents</code> table exists and RLS policies are applied.
+          </p>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="min-h-screen bg-[var(--surface-app)] text-[var(--color-ink)]">
       <div className="mx-auto flex min-h-screen max-w-[1800px] flex-col gap-3 px-3 py-3 xl:px-5">
@@ -1019,9 +1217,16 @@ function App() {
                 ? `Item ${focusedLayoutItemId.slice(0, DISPLAY_ITEM_ID_LENGTH)}${focusedLayoutItemId.length > DISPLAY_ITEM_ID_LENGTH ? '…' : ''}`
                 : 'None'}
             </span>
-            <span className="inline-flex items-center gap-1 rounded-full bg-[var(--surface-canvas)] px-2 py-0.5 text-[10px] font-medium text-[var(--color-muted)]">
-              <CheckCircle2 className="size-3" />
-              {saveStatus === 'saving' ? 'Saving content…' : 'Content saved locally'}
+            <span
+              className="inline-flex items-center gap-1 rounded-full bg-[var(--surface-canvas)] px-2 py-0.5 text-[10px] font-medium text-[var(--color-muted)]"
+              title={saveError ?? undefined}
+            >
+              <CheckCircle2 className={`size-3 ${saveStatus === 'error' ? 'text-red-500' : ''}`} />
+              {saveStatus === 'saving'
+                ? 'Saving…'
+                : saveStatus === 'error'
+                  ? 'Save failed'
+                  : 'Saved to Supabase'}
             </span>
           </div>
         </header>

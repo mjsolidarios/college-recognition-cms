@@ -1,300 +1,163 @@
 import { defaultSettings, seedPages } from '@/lib/sample-data'
-import { isValidFlowPosition, normalizeFlowPosition } from '@/lib/flow-position'
-import type { CmsPage, CmsSettings, CorePage } from '@/types/cms'
+import { migratePages } from '@/lib/storage-migrations'
+import { clearLegacyLocalStorage, hasLegacyLocalStorage, readLegacyLocalStorage } from '@/lib/storage-local'
+import { getSupabaseClient, type CmsDocumentRow } from '@/lib/supabase'
+import type { CmsPage, CmsSettings } from '@/types/cms'
+import { CMS_DOCUMENT_SLUG, type CmsState } from '@/types/cms-state'
 
-const PAGES_KEY = 'cms_v1_pages'
-const SETTINGS_KEY = 'cms_v1_settings'
-const FRONT_COVER_KEY = 'cms_v1_front_cover'
-const BACK_COVER_KEY = 'cms_v1_back_cover'
+export type { CmsState } from '@/types/cms-state'
 
-function canUseStorage() {
-  return typeof window !== 'undefined' && typeof window.localStorage !== 'undefined'
+function sortPages(pages: CmsPage[]): CmsPage[] {
+  return [...pages].sort((left, right) => left.order - right.order)
 }
 
-function readJson<T>(key: string, fallback: T): T {
-  if (!canUseStorage()) {
-    return fallback
-  }
-
-  const rawValue = window.localStorage.getItem(key)
-
-  if (!rawValue) {
-    return fallback
-  }
-
-  try {
-    return JSON.parse(rawValue) as T
-  } catch {
-    return fallback
-  }
-}
-
-function writeJson<T>(key: string, value: T) {
-  if (!canUseStorage()) {
-    return
-  }
-
-  window.localStorage.setItem(key, JSON.stringify(value))
-}
-
-function normalizeNewlines(text: string) {
-  return text.replace(/\r\n/g, '\n')
-}
-
-/** Legacy Dean section lumped secretary into the body; split when missing a College Secretary section. */
-function trySplitDeanBodyWithSecretary(body: string): { deanBody: string; secretaryBody: string } | null {
-  const text = normalizeNewlines(body).trimEnd()
-  const blocks = text.split(/\n\s*\n/).map((b) => b.trim()).filter(Boolean)
-  if (blocks.length < 2) return null
-  const last = blocks.at(-1)!
-  const lines = last.split('\n').map((l) => l.trim()).filter(Boolean)
-  if (lines.length < 2) return null
-  const lastLine = lines.at(-1)!
-  if (!/^college\s+secretary$/i.test(lastLine)) return null
-  const namePart = lines.slice(0, -1).join('\n').trim()
-  if (!namePart) return null
+function createSeedState(): CmsState {
   return {
-    deanBody: blocks.slice(0, -1).join('\n\n'),
-    secretaryBody: namePart,
+    pages: sortPages(seedPages),
+    settings: { ...defaultSettings },
+    documentTitle: 'College Recognition Program',
+    frontCover: null,
+    backCover: null,
   }
 }
 
-function migrateCollegeOfficialsSecretarySection(pages: CmsPage[]): { pages: CmsPage[]; changed: boolean } {
-  let changed = false
-
-  const insertDefaultSecretaryAfterDean = (core: CorePage): CorePage => {
-    const deanIndex = core.content.sections.findIndex(
-      (s) => s.id === 'core-officials-dean' || /^dean$/i.test(s.title.trim()),
-    )
-    if (deanIndex < 0) {
-      return core
-    }
-    const sections = [...core.content.sections]
-    sections.splice(deanIndex + 1, 0, {
-      id: 'core-officials-secretary',
-      title: 'College Secretary',
-      body: 'Mr. Neiljan C. Raborar',
-    })
-    return { ...core, content: { ...core.content, sections } }
+function rowToState(row: CmsDocumentRow): CmsState {
+  const pages = Array.isArray(row.pages) ? (row.pages as CmsPage[]) : []
+  const settings = {
+    ...defaultSettings,
+    ...(row.settings && typeof row.settings === 'object' ? (row.settings as CmsSettings) : {}),
   }
 
-  const next = pages.map((page) => {
-    if (page.id !== 'core-officials' || page.type !== 'core') {
-      return page
-    }
+  return {
+    pages: migratePages(pages),
+    settings,
+    documentTitle: row.document_title || 'College Recognition Program',
+    frontCover: row.front_cover,
+    backCover: row.back_cover,
+  }
+}
 
-    const core = page as CorePage
-    const hasSecretarySection = core.content.sections.some(
-      (s) => s.id === 'core-officials-secretary' || /^college\s+secretary$/i.test(s.title.trim()),
-    )
-    if (hasSecretarySection) {
-      return page
-    }
+function stateToRow(state: CmsState): Omit<CmsDocumentRow, 'id' | 'created_at' | 'updated_at'> {
+  return {
+    slug: CMS_DOCUMENT_SLUG,
+    document_title: state.documentTitle,
+    pages: migratePages(state.pages),
+    settings: state.settings,
+    front_cover: state.frontCover,
+    back_cover: state.backCover,
+  }
+}
 
-    const deanIndex = core.content.sections.findIndex(
-      (s) => s.id === 'core-officials-dean' || /^dean$/i.test(s.title.trim()),
-    )
-    if (deanIndex < 0) {
-      return page
-    }
+async function fetchDocumentRow(): Promise<CmsDocumentRow | null> {
+  const supabase = getSupabaseClient()
+  const { data, error } = await supabase
+    .from('cms_documents')
+    .select('*')
+    .eq('slug', CMS_DOCUMENT_SLUG)
+    .maybeSingle()
 
-    const dean = core.content.sections[deanIndex]
-    const split = trySplitDeanBodyWithSecretary(dean.body)
-    if (split) {
-      changed = true
-      const deanSection = { ...dean, body: split.deanBody }
-      const secretarySection = {
-        id: 'core-officials-secretary',
-        title: 'College Secretary',
-        body: split.secretaryBody,
+  if (error) {
+    throw new Error(error.message)
+  }
+
+  return data as CmsDocumentRow | null
+}
+
+async function upsertDocumentState(state: CmsState): Promise<CmsState> {
+  const supabase = getSupabaseClient()
+  const payload = {
+    ...stateToRow(state),
+    updated_at: new Date().toISOString(),
+  }
+
+  const { data, error } = await supabase
+    .from('cms_documents')
+    .upsert(payload, { onConflict: 'slug' })
+    .select('*')
+    .single()
+
+  if (error) {
+    throw new Error(error.message)
+  }
+
+  return rowToState(data as CmsDocumentRow)
+}
+
+async function resolveInitialState(): Promise<CmsState> {
+  const existing = await fetchDocumentRow()
+  if (existing) {
+    const pages = Array.isArray(existing.pages) ? (existing.pages as CmsPage[]) : []
+    if (pages.length > 0) {
+      const state = rowToState(existing)
+      const migrated = migratePages(state.pages)
+      if (JSON.stringify(migrated) !== JSON.stringify(state.pages)) {
+        return upsertDocumentState({ ...state, pages: migrated })
       }
-
-      const sections = [...core.content.sections]
-      sections[deanIndex] = deanSection
-      sections.splice(deanIndex + 1, 0, secretarySection)
-
-      return {
-        ...core,
-        content: { ...core.content, sections },
-      }
+      return state
     }
+  }
 
-    changed = true
-    return insertDefaultSecretaryAfterDean(core)
+  if (hasLegacyLocalStorage()) {
+    const legacy = readLegacyLocalStorage()
+    if (legacy) {
+      const migrated: CmsState = {
+        ...legacy,
+        pages: migratePages(legacy.pages),
+        settings: { ...defaultSettings, ...legacy.settings },
+      }
+      const saved = await upsertDocumentState(migrated)
+      clearLegacyLocalStorage()
+      return saved
+    }
+  }
+
+  return upsertDocumentState(createSeedState())
+}
+
+export async function loadCmsState(): Promise<CmsState> {
+  return resolveInitialState()
+}
+
+export async function saveCmsState(state: CmsState): Promise<CmsState> {
+  return upsertDocumentState({
+    ...state,
+    pages: sortPages(state.pages),
+    settings: { ...defaultSettings, ...state.settings },
   })
-
-  return { pages: next, changed }
 }
 
-/** Remove a trailing lone "Dean" line — it duplicates the section title and sits above the next section (e.g. College Secretary). */
-function stripTrailingDeanRankLine(body: string): string {
-  const normalized = normalizeNewlines(body).trimEnd()
-  return normalized.replace(/\n\s*Dean\s*$/, '').trimEnd()
+export async function savePages(pages: CmsPage[], current: CmsState): Promise<CmsPage[]> {
+  const saved = await saveCmsState({ ...current, pages: sortPages(pages) })
+  return saved.pages
 }
 
-function migrateStripTrailingDeanFromTitleSection(pages: CmsPage[]): { pages: CmsPage[]; changed: boolean } {
-  let changed = false
-  const next = pages.map((page) => {
-    if (page.type !== 'core') {
-      return page
-    }
-    let sectionChanged = false
-    const core = page as CorePage
-    const sections = core.content.sections.map((section) => {
-      if (!/^dean$/i.test(section.title.trim())) {
-        return section
-      }
-      const stripped = stripTrailingDeanRankLine(section.body)
-      if (stripped === section.body) {
-        return section
-      }
-      sectionChanged = true
-      return { ...section, body: stripped }
-    })
-    if (!sectionChanged) {
-      return page
-    }
-    changed = true
-    return { ...core, content: { ...core.content, sections } }
-  })
-  return { pages: next, changed }
+export async function deletePage(pageId: string, current: CmsState): Promise<CmsPage[]> {
+  const nextPages = current.pages.filter((page) => page.id !== pageId)
+  const saved = await saveCmsState({ ...current, pages: nextPages })
+  return saved.pages
 }
 
-function migrateCoreSectionFlowPosition(pages: CmsPage[]): { pages: CmsPage[]; changed: boolean } {
-  let changed = false
-  const stripFlowPosition = (section: { id: string; title: string; body: string }) => ({
-    id: section.id,
-    title: section.title,
-    body: section.body,
-  })
-  const next = pages.map((page) => {
-    if (page.type !== 'core') {
-      return page
-    }
-    let sectionChanged = false
-    const sections = page.content.sections.map((section) => {
-      if (section.flowPosition === undefined) {
-        return section
-      }
-      if (isValidFlowPosition(section.flowPosition)) {
-        const rounded = normalizeFlowPosition(section.flowPosition)
-        if (rounded === undefined) {
-          sectionChanged = true
-          return stripFlowPosition(section)
-        }
-        if (rounded === section.flowPosition) {
-          return section
-        }
-        sectionChanged = true
-        return { ...section, flowPosition: rounded }
-      }
-      sectionChanged = true
-      return stripFlowPosition(section)
-    })
-    if (!sectionChanged) {
-      return page
-    }
-    changed = true
-    return { ...page, content: { ...page.content, sections } }
-  })
-  return { pages: next, changed }
+export async function saveSettings(settings: CmsSettings, current: CmsState): Promise<CmsSettings> {
+  const saved = await saveCmsState({ ...current, settings })
+  return saved.settings
 }
 
-export function getPages(): CmsPage[] {
-  // TODO: replace with Supabase.
-  const pages = readJson<CmsPage[]>(PAGES_KEY, seedPages)
-  let effective = [...pages].sort((a, b) => a.order - b.order)
-
-  let anyChanged = false
-  const secretaryResult = migrateCollegeOfficialsSecretarySection(effective)
-  effective = secretaryResult.pages
-  anyChanged ||= secretaryResult.changed
-
-  const stripDeanResult = migrateStripTrailingDeanFromTitleSection(effective)
-  effective = stripDeanResult.pages
-  anyChanged ||= stripDeanResult.changed
-
-  const flowPositionResult = migrateCoreSectionFlowPosition(effective)
-  effective = flowPositionResult.pages
-  anyChanged ||= flowPositionResult.changed
-
-  if (anyChanged && canUseStorage()) {
-    writeJson(PAGES_KEY, effective)
-  }
-
-  if (!canUseStorage() || window.localStorage.getItem(PAGES_KEY)) {
-    return [...effective].sort((left, right) => left.order - right.order)
-  }
-
-  writeJson(PAGES_KEY, seedPages)
-  return [...seedPages]
+export async function saveDocumentTitle(documentTitle: string, current: CmsState): Promise<string> {
+  const saved = await saveCmsState({ ...current, documentTitle })
+  return saved.documentTitle
 }
 
-export function savePage(page: CmsPage): CmsPage[] {
-  // TODO: replace with Supabase.
-  const pages = getPages()
-  const existingIndex = pages.findIndex((entry) => entry.id === page.id)
-
-  if (existingIndex >= 0) {
-    pages[existingIndex] = page
-  } else {
-    pages.push(page)
-  }
-
-  const nextPages = [...pages].sort((left, right) => left.order - right.order)
-  writeJson(PAGES_KEY, nextPages)
-  return nextPages
+export async function saveFrontCover(frontCover: string | null, current: CmsState): Promise<string | null> {
+  const saved = await saveCmsState({ ...current, frontCover })
+  return saved.frontCover
 }
 
-export function deletePage(pageId: string): CmsPage[] {
-  // TODO: replace with Supabase.
-  const nextPages = getPages().filter((page) => page.id !== pageId)
-  writeJson(PAGES_KEY, nextPages)
-  return nextPages
+export async function saveBackCover(backCover: string | null, current: CmsState): Promise<string | null> {
+  const saved = await saveCmsState({ ...current, backCover })
+  return saved.backCover
 }
 
-export function getSettings(): CmsSettings {
-  // TODO: replace with Supabase.
-  const settings = readJson<CmsSettings>(SETTINGS_KEY, defaultSettings)
-
-  if (!canUseStorage() || window.localStorage.getItem(SETTINGS_KEY)) {
-    return { ...defaultSettings, ...settings }
-  }
-
-  writeJson(SETTINGS_KEY, defaultSettings)
-  return { ...defaultSettings }
-}
-
-export function saveSettings(settings: CmsSettings): CmsSettings {
-  // TODO: replace with Supabase.
-  writeJson(SETTINGS_KEY, settings)
-  return settings
-}
-
-export function getFrontCover(): string | null {
-  if (!canUseStorage()) return null
-  return window.localStorage.getItem(FRONT_COVER_KEY)
-}
-
-export function saveFrontCover(dataUrl: string | null): void {
-  if (!canUseStorage()) return
-  if (dataUrl === null) {
-    window.localStorage.removeItem(FRONT_COVER_KEY)
-  } else {
-    window.localStorage.setItem(FRONT_COVER_KEY, dataUrl)
-  }
-}
-
-export function getBackCover(): string | null {
-  if (!canUseStorage()) return null
-  return window.localStorage.getItem(BACK_COVER_KEY)
-}
-
-export function saveBackCover(dataUrl: string | null): void {
-  if (!canUseStorage()) return
-  if (dataUrl === null) {
-    window.localStorage.removeItem(BACK_COVER_KEY)
-  } else {
-    window.localStorage.setItem(BACK_COVER_KEY, dataUrl)
-  }
+export async function resetCmsDocument(): Promise<CmsState> {
+  clearLegacyLocalStorage()
+  return upsertDocumentState(createSeedState())
 }
