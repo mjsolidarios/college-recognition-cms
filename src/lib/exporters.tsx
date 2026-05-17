@@ -214,6 +214,7 @@ export async function copySlotAsFigmaLayout(
   allRenderedPages?: RenderedPage[],
 ) {
   const markup = buildSvgDocumentMarkup([slot], settings, allRenderedPages)
+  const richClipboardErrorMessage = 'Failed to copy the Figma layout as rich SVG clipboard data.'
 
   if (typeof ClipboardItem !== 'undefined' && navigator.clipboard.write) {
     try {
@@ -225,9 +226,15 @@ export async function copySlotAsFigmaLayout(
         }),
       ])
       return
-    } catch {
-      await navigator.clipboard.writeText(markup)
-      return
+    } catch (richClipboardError) {
+      try {
+        await navigator.clipboard.writeText(markup)
+        return
+      } catch (textClipboardError) {
+        const richMessage = richClipboardError instanceof Error ? richClipboardError.message : richClipboardErrorMessage
+        const textMessage = textClipboardError instanceof Error ? textClipboardError.message : 'Failed to copy the Figma layout as plain text.'
+        throw new Error(`${richMessage} Fallback plain-text copy also failed: ${textMessage}`)
+      }
     }
   }
 
