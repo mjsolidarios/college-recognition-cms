@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronRight, Minus, Plus, Redo2, RotateCcw, Undo2 } from 'lucide-react'
+import { ChevronLeft, ChevronRight, CircleHelp, Minus, Plus, Redo2, RotateCcw, Undo2 } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 
 import { Button } from '@/components/ui/button'
@@ -15,6 +15,25 @@ import { PAGE_HEIGHT, PAGE_WIDTH, type RenderedPage } from '@/types/cms'
 
 const RULER_SIZE = 24
 const RULER_FONT = `7.5px 'JetBrains Mono', 'Fira Code', monospace`
+const CANVAS_HINTS_HIDDEN_KEY = 'cms_canvas_hints_hidden'
+
+function readHintsHiddenPreference(): boolean {
+  if (typeof window === 'undefined') {
+    return false
+  }
+  return window.localStorage.getItem(CANVAS_HINTS_HIDDEN_KEY) === '1'
+}
+
+function persistHintsHiddenPreference(hidden: boolean) {
+  if (typeof window === 'undefined') {
+    return
+  }
+  if (hidden) {
+    window.localStorage.setItem(CANVAS_HINTS_HIDDEN_KEY, '1')
+  } else {
+    window.localStorage.removeItem(CANVAS_HINTS_HIDDEN_KEY)
+  }
+}
 function releasePointerCaptureIfHeld(target: EventTarget | null, pointerId: number) {
   if (!(target instanceof Element) || !target.hasPointerCapture(pointerId)) {
     return
@@ -205,7 +224,7 @@ export function CanvasPreview({
   const [zoom, setZoom] = useState(0.85)
   const [pan, setPan] = useState({ x: 100, y: 50 })
   const [isSpaceDown, setIsSpaceDown] = useState(false)
-  const [showHints, setShowHints] = useState(true)
+  const [showHints, setShowHints] = useState(() => !readHintsHiddenPreference())
   const [isDragging, setIsDragging] = useState(false)
   const [itemDrag, setItemDrag] = useState<{
     pageId: string
@@ -418,7 +437,12 @@ export function CanvasPreview({
 
   const activeGuide =
     itemDrag && currentSlot?.kind === 'page'
-      ? placementFromFlow(itemDrag.flow, itemDrag.contentTop, itemDrag.maxContentY)
+      ? placementFromFlow(
+          itemDrag.flow,
+          itemDrag.contentTop,
+          itemDrag.maxContentY,
+          currentSlot.page.sourcePageType,
+        )
       : null
 
   const cursorClass = isDragging ? 'cursor-grabbing' : isSpaceDown ? 'cursor-grab' : 'cursor-default'
@@ -515,6 +539,22 @@ export function CanvasPreview({
             <RotateCcw className="mr-1 size-3.5 shrink-0" />
             Reset view
           </Button>
+          {!showHints ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="size-7 text-[var(--color-primary)]"
+              onClick={() => {
+                persistHintsHiddenPreference(false)
+                setShowHints(true)
+              }}
+              title="Show canvas navigation tips"
+              aria-label="Show canvas navigation tips"
+            >
+              <CircleHelp className="size-3.5 shrink-0" />
+            </Button>
+          ) : null}
         </div>
       </div>
 
@@ -530,7 +570,10 @@ export function CanvasPreview({
             type="button"
             className="text-[11px] font-medium text-[var(--color-primary)] underline"
             aria-label="Hide canvas navigation tips"
-            onClick={() => setShowHints(false)}
+            onClick={() => {
+              persistHintsHiddenPreference(true)
+              setShowHints(false)
+            }}
           >
             Hide tips
           </button>

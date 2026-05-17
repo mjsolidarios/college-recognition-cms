@@ -1,7 +1,11 @@
 import { snapFlowPosition } from '@/lib/flow-position'
-import { PAGE_WIDTH, type RenderedPage } from '@/types/cms'
+import { PAGE_WIDTH, type PageType, type RenderedPage } from '@/types/cms'
 
 const PAGE_CENTER_X = PAGE_WIDTH / 2
+
+export function columnsPerPageForType(pageType: PageType): number {
+  return pageType === 'program' ? 1 : 2
+}
 
 function clampNumber(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value))
@@ -13,16 +17,23 @@ export function flowFromPlacement(
   y: number,
   contentTop: number,
   maxContentY: number,
+  pageType: PageType,
 ) {
   const columnHeight = Math.max(1, maxContentY - contentTop)
   const yInColumn = clampNumber(y - contentTop, 0, columnHeight)
-  return localPageIndex * columnHeight * 2 + column * columnHeight + yInColumn
+  const columnsPerPage = columnsPerPageForType(pageType)
+  return localPageIndex * columnHeight * columnsPerPage + column * columnHeight + yInColumn
 }
 
-export function placementFromFlow(flowPosition: number, contentTop: number, maxContentY: number) {
+export function placementFromFlow(
+  flowPosition: number,
+  contentTop: number,
+  maxContentY: number,
+  pageType: PageType,
+) {
   const columnHeight = Math.max(1, maxContentY - contentTop)
   const safeFlow = Math.max(0, flowPosition)
-  const pageSpan = columnHeight * 2
+  const pageSpan = columnHeight * columnsPerPageForType(pageType)
   const localPageIndex = Math.floor(safeFlow / pageSpan)
   const withinPage = safeFlow - localPageIndex * pageSpan
   const column = (withinPage >= columnHeight ? 1 : 0) as 0 | 1
@@ -65,6 +76,7 @@ export function buildLayoutItemStartFlowMap(
         block.y,
         renderedPage.contentTop,
         renderedPage.maxContentY,
+        renderedPage.sourcePageType,
       )
       const currentStart = startById.get(block.sectionId)
       if (currentStart === undefined || flow < currentStart) {
@@ -103,6 +115,7 @@ export function buildLayoutItemOverlays(
       top,
       renderedPage.contentTop,
       renderedPage.maxContentY,
+      renderedPage.sourcePageType,
     )
 
     return {

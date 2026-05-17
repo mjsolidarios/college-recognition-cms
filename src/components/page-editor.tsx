@@ -17,13 +17,6 @@ import { useEffect, useRef, useState } from 'react'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
 import type {
@@ -249,30 +242,7 @@ function EditorChrome({ page, children }: { page: CmsPage; children: React.React
         <p className="text-xs text-[var(--color-muted)]">Update content and structure for the selected page.</p>
       </div>
 
-      <div className="space-y-4 p-4 pt-2">
-        <div className="grid gap-3 md:grid-cols-2">
-          <div className="space-y-1.5 md:col-span-2">
-            <SectionLabel>Page title</SectionLabel>
-            <Input value={page.title} readOnly className="bg-[var(--surface-canvas)] text-[var(--color-muted)]" />
-          </div>
-          <div className="space-y-1.5">
-            <SectionLabel>Page type</SectionLabel>
-            <Select value={page.type} onValueChange={() => undefined}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={page.type}>{page.type}</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-1.5">
-            <SectionLabel>Order</SectionLabel>
-            <Input value={String(page.order + 1)} readOnly className="bg-[var(--surface-canvas)] text-[var(--color-muted)]" />
-          </div>
-        </div>
-        {children}
-      </div>
+      <div className="space-y-4 p-4 pt-2">{children}</div>
     </div>
   )
 }
@@ -352,22 +322,14 @@ function ProgramEditor({
                 })
               }
               >
-                <div className="grid gap-3 md:grid-cols-2">
+                <div className="space-y-3">
                   <div className="space-y-1.5">
-                    <SectionLabel>Left title</SectionLabel>
+                    <SectionLabel>Title</SectionLabel>
                     <Input value={row.leftTitle} onChange={(event) => updateRow(row.id, (current) => ({ ...current, leftTitle: event.target.value }))} />
                   </div>
                   <div className="space-y-1.5">
-                    <SectionLabel>Right title</SectionLabel>
-                    <Input value={row.rightTitle ?? ''} onChange={(event) => updateRow(row.id, (current) => ({ ...current, rightTitle: event.target.value }))} />
-                  </div>
-                  <div className="space-y-1.5">
-                    <SectionLabel>Left body</SectionLabel>
+                    <SectionLabel>Body</SectionLabel>
                     <Textarea value={row.leftBody} onChange={(event) => updateRow(row.id, (current) => ({ ...current, leftBody: event.target.value }))} />
-                  </div>
-                  <div className="space-y-1.5">
-                    <SectionLabel>Right body</SectionLabel>
-                    <Textarea value={row.rightBody ?? ''} onChange={(event) => updateRow(row.id, (current) => ({ ...current, rightBody: event.target.value }))} />
                   </div>
                 </div>
               </ReorderableItemCard>
@@ -386,8 +348,6 @@ function ProgramEditor({
                     id: crypto.randomUUID(),
                     leftTitle: 'New item',
                     leftBody: '',
-                    rightTitle: 'Supporting detail',
-                    rightBody: '',
                   },
                 ],
               },

@@ -588,13 +588,17 @@ function addLinesToFlow(context: LayoutContext, options: TextOptions) {
   }
 }
 
+function getColumnsPerPage(context: LayoutContext): number {
+  return context.logicalPage.type === 'program' ? 1 : 2
+}
+
 function setContextToFlowPosition(context: LayoutContext, flowPosition: number) {
   const columnHeight = context.maxContentY - context.contentTop
   if (columnHeight <= 0) {
     return
   }
   const safeFlow = Math.max(0, flowPosition)
-  const columnsPerPage = 2
+  const columnsPerPage = getColumnsPerPage(context)
   const pageSpan = columnHeight * columnsPerPage
   const pageOffset = Math.floor(safeFlow / pageSpan)
   const withinPage = safeFlow - pageOffset * pageSpan
@@ -945,114 +949,69 @@ function packFlowPositions<T extends FlowOrderedItem>(
 function renderProgramRow(context: LayoutContext, row: ProgramRow, index: number) {
   const afterBodySpacing = context.settings.bodySize * context.settings.lineHeight
   const sectionId = row.id
-    const leftBodyReserve = estimateTextHeight(
-      context,
-      {
-        idPrefix: `program-left-body-${index}-reserve`,
-        text: row.leftBody,
-        fontSize: context.settings.bodySize,
-        pinColumn: 0,
-      },
-      2,
-    )
-    const rightBodyReserve = estimateTextHeight(
-      context,
-      {
-        idPrefix: `program-right-body-${index}-reserve`,
-        text: row.rightBody ?? '',
-        fontSize: context.settings.bodySize,
-        pinColumn: 1,
-      },
-      2,
-    )
-    const leftTitleReserve = estimateTextHeight(
-      context,
-      {
-        idPrefix: `program-left-title-${index}-reserve`,
-        text: row.leftTitle,
-        fontSize: context.settings.bodySize,
-        textRole: 'heading',
-        fontWeight: 'bold',
-        spacingAfter: 1,
-        pinColumn: 0,
-      },
-      1,
-      true,
-    )
-    const rightTitleReserve = estimateTextHeight(
-      context,
-      {
-        idPrefix: `program-right-title-${index}-reserve`,
-        text: row.rightTitle ?? '',
-        fontSize: context.settings.bodySize,
-        textRole: 'heading',
-        fontWeight: 'bold',
-        spacingAfter: 1,
-        pinColumn: 1,
-      },
-      1,
-      true,
-    )
-    let currentRowTop = Math.max(context.currentY[0], context.currentY[1])
-    const minimumRowHeight = Math.max(leftTitleReserve + leftBodyReserve, rightTitleReserve + rightBodyReserve)
+  const flowOptions = { fullWidth: true, pinColumn: 0 as const }
 
-    // Only push the row to the next page when we are already mid-page; a fresh page should use all available space.
-    if (currentRowTop > context.contentTop && context.maxContentY - currentRowTop < minimumRowHeight) {
-      advanceToNextPage(context)
-      currentRowTop = context.contentTop
+  const parts: Array<{ type: 'title' | 'body'; text: string }> = [
+    { type: 'title', text: row.leftTitle },
+    { type: 'body', text: row.leftBody },
+  ]
+  if (row.rightTitle?.trim()) {
+    parts.push({ type: 'title', text: row.rightTitle })
+  }
+  if (row.rightBody?.trim()) {
+    parts.push({ type: 'body', text: row.rightBody })
+  }
+
+  for (let partIndex = 0; partIndex < parts.length; partIndex += 1) {
+    const part = parts[partIndex]
+    if (!part.text.trim()) {
+      continue
     }
 
-    const rowStartPageIndex = context.currentPageIndex
-    context.currentY[0] = currentRowTop
-    context.currentY[1] = currentRowTop
+    if (part.type === 'title') {
+      const next = parts[partIndex + 1]
+      const bodyReserve =
+        next?.type === 'body'
+          ? estimateTextHeight(
+              context,
+              {
+                idPrefix: `program-body-${index}-reserve-${partIndex}`,
+                text: next.text,
+                fontSize: context.settings.bodySize,
+                ...flowOptions,
+              },
+              2,
+            )
+          : 0
+
+      addLinesToFlow(context, {
+        idPrefix: `program-title-${index}-${partIndex}`,
+        text: part.text,
+        fontSize: context.settings.bodySize,
+        textRole: 'heading',
+        fontWeight: 'bold',
+        spacingAfter: 1,
+        allowSplit: false,
+        reserveHeight: bodyReserve,
+        sectionId,
+        ...flowOptions,
+      })
+      continue
+    }
 
     addLinesToFlow(context, {
-      idPrefix: `program-left-title-${index}`,
-      text: row.leftTitle,
-      fontSize: context.settings.bodySize,
-      textRole: 'heading',
-      fontWeight: 'bold',
-      spacingAfter: 1,
-      allowSplit: false,
-      pinColumn: 0,
-      reserveHeight: leftBodyReserve,
-      sectionId,
-    })
-    addLinesToFlow(context, {
-      idPrefix: `program-left-body-${index}`,
-      text: row.leftBody,
+      idPrefix: `program-body-${index}-${partIndex}`,
+      text: part.text,
       fontSize: context.settings.bodySize,
       spacingAfter: afterBodySpacing,
-      pinColumn: 0,
       minFragmentLines: 2,
       sectionId,
+      ...flowOptions,
     })
+  }
 
-    const stillSameRowPage = context.currentPageIndex === rowStartPageIndex
-    context.currentY[1] = stillSameRowPage ? currentRowTop : context.currentY[1]
-
-    addLinesToFlow(context, {
-      idPrefix: `program-right-title-${index}`,
-      text: row.rightTitle ?? '',
-      fontSize: context.settings.bodySize,
-      textRole: 'heading',
-      fontWeight: 'bold',
-      spacingAfter: 1,
-      allowSplit: false,
-      pinColumn: 1,
-      reserveHeight: rightBodyReserve,
-      sectionId,
-    })
-    addLinesToFlow(context, {
-      idPrefix: `program-right-body-${index}`,
-      text: row.rightBody ?? '',
-      fontSize: context.settings.bodySize,
-      spacingAfter: afterBodySpacing,
-      pinColumn: 1,
-      minFragmentLines: 2,
-      sectionId,
-    })
-  context.currentColumn = context.currentY[0] >= context.currentY[1] ? 0 : 1
+  context.currentColumn = 0
+  context.currentY[1] = context.currentY[0]
 }
 
 function renderProgramPage(context: LayoutContext, rows: ProgramRow[]) {
@@ -1101,7 +1060,7 @@ const FLOW_PACK_GAP = SECTION_GAP
 
 function flowAtLayoutContext(context: LayoutContext, column: 0 | 1): number {
   const columnHeight = Math.max(1, context.maxContentY - context.contentTop)
-  const pageSpan = columnHeight * 2
+  const pageSpan = columnHeight * getColumnsPerPage(context)
   const yInColumn = Math.max(0, context.currentY[column] - context.contentTop)
   const withinPage = (column === 1 ? columnHeight : 0) + yInColumn
   return context.currentPageIndex * pageSpan + withinPage
