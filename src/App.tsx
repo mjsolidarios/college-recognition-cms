@@ -243,6 +243,7 @@ function App() {
   const [isExporting, setIsExporting] = useState(false)
   const [pdfExportProgress, setPdfExportProgress] = useState<PdfExportProgress | null>(null)
   const [mobileTab, setMobileTab] = useState<MobileTab>('canvas')
+  const [isPagesPanelCollapsed, setIsPagesPanelCollapsed] = useState(false)
   const [editorWidth, setEditorWidth] = useState(DEFAULT_EDITOR_WIDTH)
   const dragRef = useRef<{ startX: number; startWidth: number } | null>(null)
 
@@ -1262,7 +1263,7 @@ function App() {
           style={{ minHeight: 'calc(100vh - 9rem)' }}
         >
           {/* Page list */}
-          <div className="w-[280px] flex-shrink-0">
+          <div className={`flex-shrink-0 transition-[width] duration-300 ease-out ${isPagesPanelCollapsed ? 'w-[88px]' : 'w-[320px]'}`}>
             <PageList
               pages={pages}
               activePageId={activePage?.id ?? ''}
@@ -1270,6 +1271,9 @@ function App() {
               onAdd={handleAddPage}
               onDelete={handleDeletePage}
               onReorder={handleReorder}
+              collapsed={isPagesPanelCollapsed}
+              allowCollapse
+              onToggleCollapsed={() => setIsPagesPanelCollapsed((current) => !current)}
             />
           </div>
 
