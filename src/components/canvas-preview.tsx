@@ -17,6 +17,7 @@ import { PAGE_HEIGHT, PAGE_WIDTH, type BorderStyle, type RenderedPage } from '@/
 const RULER_SIZE = 24
 const RULER_FONT = `7.5px 'JetBrains Mono', 'Fira Code', monospace`
 const CANVAS_HINTS_HIDDEN_KEY = 'cms_canvas_hints_hidden'
+const FIGMA_COPY_FEEDBACK_DURATION = 2200
 
 function readHintsHiddenPreference(): boolean {
   if (typeof window === 'undefined') {
@@ -439,7 +440,7 @@ export function CanvasPreview({
     figmaCopyResetTimeoutRef.current = window.setTimeout(() => {
       setFigmaCopyState('idle')
       figmaCopyResetTimeoutRef.current = null
-    }, 2200)
+    }, FIGMA_COPY_FEEDBACK_DURATION)
   }
   const handleCopyAsFigmaLayout = async () => {
     if (!currentExportSlot) {
@@ -477,9 +478,11 @@ export function CanvasPreview({
     }
   }, [])
 
-  useEffect(() => () => {
-    if (figmaCopyResetTimeoutRef.current != null) {
-      window.clearTimeout(figmaCopyResetTimeoutRef.current)
+  useEffect(() => {
+    return () => {
+      if (figmaCopyResetTimeoutRef.current != null) {
+        window.clearTimeout(figmaCopyResetTimeoutRef.current)
+      }
     }
   }, [])
 
