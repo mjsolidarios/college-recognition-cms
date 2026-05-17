@@ -949,69 +949,84 @@ function packFlowPositions<T extends FlowOrderedItem>(
 function renderProgramRow(context: LayoutContext, row: ProgramRow, index: number) {
   const afterBodySpacing = context.settings.bodySize * context.settings.lineHeight
   const sectionId = row.id
-  const flowOptions = { fullWidth: true, pinColumn: 0 as const }
+  const hasRightColumn = row.rightTitle !== undefined || row.rightBody !== undefined
+  const rowTop = context.currentY[0]
+  context.currentColumn = 0
+  context.currentY = [rowTop, rowTop]
 
-  const parts: Array<{ type: 'title' | 'body'; text: string }> = [
-    { type: 'title', text: row.leftTitle },
-    { type: 'body', text: row.leftBody },
-  ]
-  if (row.rightTitle?.trim()) {
-    parts.push({ type: 'title', text: row.rightTitle })
-  }
-  if (row.rightBody?.trim()) {
-    parts.push({ type: 'body', text: row.rightBody })
-  }
+  const renderColumnParts = (
+    parts: Array<{ type: 'title' | 'body'; text: string }>,
+    pinColumn: 0 | 1,
+    fullWidth: boolean,
+  ) => {
+    const flowOptions = fullWidth ? { fullWidth: true, pinColumn } : { pinColumn }
 
-  for (let partIndex = 0; partIndex < parts.length; partIndex += 1) {
-    const part = parts[partIndex]
-    if (!part.text.trim()) {
-      continue
-    }
+    for (let partIndex = 0; partIndex < parts.length; partIndex += 1) {
+      const part = parts[partIndex]
+      if (!part.text.trim()) {
+        continue
+      }
 
-    if (part.type === 'title') {
-      const next = parts[partIndex + 1]
-      const bodyReserve =
-        next?.type === 'body'
-          ? estimateTextHeight(
-              context,
-              {
-                idPrefix: `program-body-${index}-reserve-${partIndex}`,
-                text: next.text,
-                fontSize: context.settings.bodySize,
-                ...flowOptions,
-              },
-              2,
-            )
-          : 0
+      if (part.type === 'title') {
+        const next = parts[partIndex + 1]
+        const bodyReserve =
+          next?.type === 'body'
+            ? estimateTextHeight(
+                context,
+                {
+                  idPrefix: `program-body-${index}-reserve-${pinColumn}-${partIndex}`,
+                  text: next.text,
+                  fontSize: context.settings.bodySize,
+                  ...flowOptions,
+                },
+                2,
+              )
+            : 0
+
+        addLinesToFlow(context, {
+          idPrefix: `program-title-${index}-${pinColumn}-${partIndex}`,
+          text: part.text,
+          fontSize: context.settings.bodySize,
+          textRole: 'heading',
+          fontWeight: 'bold',
+          spacingAfter: 1,
+          allowSplit: false,
+          reserveHeight: bodyReserve,
+          sectionId,
+          ...flowOptions,
+        })
+        continue
+      }
 
       addLinesToFlow(context, {
-        idPrefix: `program-title-${index}-${partIndex}`,
+        idPrefix: `program-body-${index}-${pinColumn}-${partIndex}`,
         text: part.text,
         fontSize: context.settings.bodySize,
-        textRole: 'heading',
-        fontWeight: 'bold',
-        spacingAfter: 1,
-        allowSplit: false,
-        reserveHeight: bodyReserve,
+        spacingAfter: afterBodySpacing,
+        minFragmentLines: 2,
         sectionId,
         ...flowOptions,
       })
-      continue
     }
-
-    addLinesToFlow(context, {
-      idPrefix: `program-body-${index}-${partIndex}`,
-      text: part.text,
-      fontSize: context.settings.bodySize,
-      spacingAfter: afterBodySpacing,
-      minFragmentLines: 2,
-      sectionId,
-      ...flowOptions,
-    })
   }
 
+  const leftParts: Array<{ type: 'title' | 'body'; text: string }> = [
+    { type: 'title', text: row.leftTitle },
+    { type: 'body', text: row.leftBody },
+  ]
+  const rightParts: Array<{ type: 'title' | 'body'; text: string }> = [
+    { type: 'title', text: row.rightTitle ?? '' },
+    { type: 'body', text: row.rightBody ?? '' },
+  ]
+
+  renderColumnParts(leftParts, 0, !hasRightColumn)
+  if (hasRightColumn) {
+    renderColumnParts(rightParts, 1, false)
+  }
+
+  const rowBottom = hasRightColumn ? Math.max(context.currentY[0], context.currentY[1]) : context.currentY[0]
   context.currentColumn = 0
-  context.currentY[1] = context.currentY[0]
+  context.currentY = [rowBottom, rowBottom]
 }
 
 function renderProgramPage(context: LayoutContext, rows: ProgramRow[]) {
