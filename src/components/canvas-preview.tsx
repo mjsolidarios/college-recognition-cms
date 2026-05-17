@@ -521,10 +521,10 @@ export function CanvasPreview({
       {showHints ? (
         <div className="flex flex-wrap items-start gap-2 border-b border-[var(--color-hairline-soft)] bg-[var(--surface-canvas)] px-4 py-2 text-[11px] text-[var(--color-muted)]">
           <ul className="m-0 flex min-w-0 flex-1 list-disc flex-wrap items-center gap-x-6 gap-y-1 pl-4">
-            <li>Hold <kbd aria-label="Space key" className="rounded border border-[var(--color-hairline)] bg-white px-1">Space</kbd> + drag to pan</li>
-            <li>Scroll to pan</li>
-            <li><kbd aria-label="Control or Command key" className="rounded border border-[var(--color-hairline)] bg-white px-1">Ctrl/⌘</kbd> + wheel to zoom</li>
-            <li>Select an item in Editor, then drag highlighted overlay to reflow</li>
+            <li aria-label="Hold Space and drag to pan the canvas.">Hold <kbd className="rounded border border-[var(--color-hairline)] bg-white px-1">Space</kbd> + drag to pan</li>
+            <li aria-label="Scroll to pan the canvas.">Scroll to pan</li>
+            <li aria-label="Use Control or Command plus mouse wheel to zoom."><kbd className="rounded border border-[var(--color-hairline)] bg-white px-1">Ctrl/⌘</kbd> + wheel to zoom</li>
+            <li aria-label="Select an item in the editor, then drag the highlighted overlay to reflow content.">Select an item in Editor, then drag highlighted overlay to reflow</li>
           </ul>
           <button
             type="button"
