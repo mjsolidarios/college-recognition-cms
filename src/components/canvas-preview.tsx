@@ -11,7 +11,7 @@ import { getFontStack } from '@/lib/fonts'
 import { FLOW_POSITION_SNAP_INCREMENT, snapFlowPosition } from '@/lib/flow-position'
 import { getRenderedBlockLines } from '@/lib/layout'
 import { cn } from '@/lib/utils'
-import { PAGE_HEIGHT, PAGE_WIDTH, type RenderedPage } from '@/types/cms'
+import { PAGE_HEIGHT, PAGE_WIDTH, type BorderStyle, type RenderedPage } from '@/types/cms'
 
 const RULER_SIZE = 24
 const RULER_FONT = `7.5px 'JetBrains Mono', 'Fira Code', monospace`
@@ -194,6 +194,133 @@ function VerticalRuler({ zoom, panY, maxVal }: { zoom: number; panY: number; max
   )
 }
 
+export interface CanvasBorderSettings {
+  enabled: boolean
+  style: BorderStyle
+  width: number
+  color: string
+  padding: number
+  separateSides: boolean
+  svgLeft: string | null
+  svgRight: string | null
+}
+
+function shouldPageHaveBorder(page: RenderedPage, allPages: RenderedPage[]): boolean {
+  if (allPages.length < 3) return false
+  const firstNum = allPages[0]?.pageNumber
+  const lastNum = allPages[allPages.length - 1]?.pageNumber
+  return page.pageNumber !== firstNum && page.pageNumber !== lastNum
+}
+
+function BorderOverlay({
+  page,
+  allPages,
+  settings,
+  zoom,
+}: {
+  page: RenderedPage
+  allPages: RenderedPage[]
+  settings: CanvasBorderSettings
+  zoom: number
+}) {
+  if (!settings.enabled || !shouldPageHaveBorder(page, allPages)) return null
+
+  const { style, width, color, padding, separateSides, svgLeft, svgRight } = settings
+
+  if (style === 'custom') {
+    const isEven = page.pageNumber % 2 === 0
+    const dataUrl = separateSides ? (isEven ? svgLeft : svgRight) : svgLeft
+    if (!dataUrl) return null
+    return (
+      <img
+        src={dataUrl}
+        alt=""
+        aria-hidden
+        className="pointer-events-none absolute inset-0 z-[5]"
+        style={{ width: PAGE_WIDTH * zoom, height: PAGE_HEIGHT * zoom, objectFit: 'fill' }}
+      />
+    )
+  }
+
+  const pad = padding * zoom
+  const bw = width * zoom
+
+  if (style === 'simple') {
+    return (
+      <div
+        aria-hidden
+        className="pointer-events-none absolute z-[5]"
+        style={{
+          top: pad,
+          left: pad,
+          right: pad,
+          bottom: pad,
+          border: `${bw}px solid ${color}`,
+        }}
+      />
+    )
+  }
+
+  if (style === 'double') {
+    const gap = bw * 2 + 2 * zoom
+    return (
+      <>
+        <div
+          aria-hidden
+          className="pointer-events-none absolute z-[5]"
+          style={{ top: pad, left: pad, right: pad, bottom: pad, border: `${bw}px solid ${color}` }}
+        />
+        <div
+          aria-hidden
+          className="pointer-events-none absolute z-[5]"
+          style={{
+            top: pad + gap,
+            left: pad + gap,
+            right: pad + gap,
+            bottom: pad + gap,
+            border: `${bw * 0.5}px solid ${color}`,
+          }}
+        />
+      </>
+    )
+  }
+
+  if (style === 'decorative-corners') {
+    const arm = Math.min(PAGE_WIDTH, PAGE_HEIGHT) * 0.08 * zoom
+    const x = pad
+    const y = pad
+    const w = (PAGE_WIDTH - padding * 2) * zoom
+    const h = (PAGE_HEIGHT - padding * 2) * zoom
+    const s = `${color}`
+    const sw = bw
+
+    return (
+      <svg
+        aria-hidden
+        className="pointer-events-none absolute inset-0 z-[5]"
+        width={PAGE_WIDTH * zoom}
+        height={PAGE_HEIGHT * zoom}
+        style={{ overflow: 'visible' }}
+      >
+        {/* Top-left */}
+        <line x1={x} y1={y} x2={x + arm} y2={y} stroke={s} strokeWidth={sw} />
+        <line x1={x} y1={y} x2={x} y2={y + arm} stroke={s} strokeWidth={sw} />
+        {/* Top-right */}
+        <line x1={x + w} y1={y} x2={x + w - arm} y2={y} stroke={s} strokeWidth={sw} />
+        <line x1={x + w} y1={y} x2={x + w} y2={y + arm} stroke={s} strokeWidth={sw} />
+        {/* Bottom-left */}
+        <line x1={x} y1={y + h} x2={x + arm} y2={y + h} stroke={s} strokeWidth={sw} />
+        <line x1={x} y1={y + h} x2={x} y2={y + h - arm} stroke={s} strokeWidth={sw} />
+        {/* Bottom-right */}
+        <line x1={x + w} y1={y + h} x2={x + w - arm} y2={y + h} stroke={s} strokeWidth={sw} />
+        <line x1={x + w} y1={y + h} x2={x + w} y2={y + h - arm} stroke={s} strokeWidth={sw} />
+      </svg>
+    )
+  }
+
+  return null
+}
+
 export function CanvasPreview({
   renderedPages,
   previewPageIndex,
@@ -207,6 +334,7 @@ export function CanvasPreview({
   onRedoSectionFlow,
   canUndoSectionFlow = false,
   canRedoSectionFlow = false,
+  borderSettings,
 }: {
   renderedPages: RenderedPage[]
   previewPageIndex: number
@@ -220,6 +348,7 @@ export function CanvasPreview({
   onRedoSectionFlow?: () => void
   canUndoSectionFlow?: boolean
   canRedoSectionFlow?: boolean
+  borderSettings?: CanvasBorderSettings | null
 }) {
   const [zoom, setZoom] = useState(0.85)
   const [pan, setPan] = useState({ x: 100, y: 50 })
@@ -750,6 +879,14 @@ export function CanvasPreview({
                     </div>
                   </>
                 )}
+              {borderSettings && (
+                <BorderOverlay
+                  page={currentSlot.page}
+                  allPages={renderedPages}
+                  settings={borderSettings}
+                  zoom={zoom}
+                />
+              )}
             </div>
           ) : (
             <div className="absolute left-0 top-0 translate-x-[100px] translate-y-[50px]">

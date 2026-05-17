@@ -93,6 +93,8 @@ export interface CorePage extends BasePage {
 
 export type CmsPage = ProgramPage | AcademicPage | NonAcademicPage | CorePage
 
+export type BorderStyle = 'simple' | 'double' | 'decorative-corners' | 'custom'
+
 export interface CmsSettings {
   globalScale: number
   titleSize: number
@@ -110,6 +112,22 @@ export interface CmsSettings {
   lineHeight: number
   showPageNumbers: boolean
   documentYear: string
+  /** Whether to render a border on content pages (excluding first and last). */
+  borderEnabled: boolean
+  /** Preset border style or 'custom' when using uploaded SVG images. */
+  borderStyle: BorderStyle
+  /** Border line width in px (used by preset styles). */
+  borderWidth: number
+  /** Hex color for preset border styles. */
+  borderColor: string
+  /** Inset from the page edge in px. */
+  borderPadding: number
+  /** When true, left (even) and right (odd) pages use separate SVG borders. */
+  borderSeparateSides: boolean
+  /** PNG data URL for left (even-numbered) pages, or the single border when separateSides is false. */
+  borderSvgLeft: string | null
+  /** PNG data URL for right (odd-numbered) pages when separateSides is true. */
+  borderSvgRight: string | null
 }
 
 export interface RenderTextBlock {

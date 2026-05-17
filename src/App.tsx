@@ -15,7 +15,7 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { useConfirm } from '@/components/confirm-provider'
-import { CanvasPreview } from '@/components/canvas-preview'
+import { CanvasPreview, type CanvasBorderSettings } from '@/components/canvas-preview'
 import { ExportDialog, ImportDialog } from '@/components/import-export-dialog'
 import { PageEditor } from '@/components/page-editor'
 import { PageList } from '@/components/page-list'
@@ -697,7 +697,7 @@ function App() {
     })
     try {
       await waitForUiUpdate()
-      await exportPdfDocument(renderedPages, documentTitle, setPdfExportProgress, frontCover, backCover)
+      await exportPdfDocument(renderedPages, documentTitle, setPdfExportProgress, frontCover, backCover, settings)
     } finally {
       setIsExporting(false)
       setPdfExportProgress(null)
@@ -709,7 +709,7 @@ function App() {
     if (!page) {
       return
     }
-    exportSvgDocument([page], documentTitle, frontCover, backCover)
+    exportSvgDocument([page], documentTitle, frontCover, backCover, settings, renderedPages)
   }
 
   const handleImport = (
@@ -834,6 +834,58 @@ function App() {
         })
         .catch(handleStorageError)
     }
+  }
+
+  /* ── Border SVG upload helper ───────────────────────────── */
+  const borderSvgFileRef = useRef<{ left: HTMLInputElement | null; right: HTMLInputElement | null }>({ left: null, right: null })
+
+  const loadBorderSvgFile = (file: File): Promise<string> =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = () => {
+        const svgDataUrl = reader.result as string
+        const img = new window.Image()
+        img.onload = () => {
+          const canvas = document.createElement('canvas')
+          canvas.width = PAGE_WIDTH
+          canvas.height = PAGE_HEIGHT
+          const ctx = canvas.getContext('2d')!
+          ctx.drawImage(img, 0, 0, PAGE_WIDTH, PAGE_HEIGHT)
+          resolve(canvas.toDataURL('image/png'))
+        }
+        img.onerror = () => reject(new Error('Failed to load border SVG'))
+        img.src = svgDataUrl
+      }
+      reader.onerror = () => reject(new Error('Failed to read file'))
+      reader.readAsDataURL(file)
+    })
+
+  const handleBorderSvgUpload = async (which: 'left' | 'right', file: File) => {
+    pulseSavedStatus()
+    try {
+      const dataUrl = await loadBorderSvgFile(file)
+      const key = which === 'left' ? 'borderSvgLeft' : 'borderSvgRight'
+      updateSetting(key, dataUrl)
+    } catch {
+      setSaveStatus('saved')
+    }
+  }
+
+  const handleBorderSvgClear = (which: 'left' | 'right') => {
+    const key = which === 'left' ? 'borderSvgLeft' : 'borderSvgRight'
+    updateSetting(key, null)
+  }
+
+  /* ── Derived border settings for canvas / exports ──────── */
+  const canvasBorderSettings: CanvasBorderSettings = {
+    enabled: settings.borderEnabled,
+    style: settings.borderStyle,
+    width: settings.borderWidth,
+    color: settings.borderColor,
+    padding: settings.borderPadding,
+    separateSides: settings.borderSeparateSides,
+    svgLeft: settings.borderSvgLeft,
+    svgRight: settings.borderSvgRight,
   }
 
   /* ── Shared editor/settings panel ──────────────────────── */
@@ -1110,6 +1162,164 @@ function App() {
                 />
               </div>
             </SettingsGroup>
+
+            {/* Borders */}
+            <SettingsGroup title="Borders" defaultOpen={false}>
+              <p className="text-[11px] leading-snug text-[var(--color-muted)]">
+                Add a decorative border to content pages. The first and last page are excluded. Upload a custom SVG/PNG or choose a preset style.
+              </p>
+              <label className="flex items-center justify-between gap-3 rounded-lg py-1 text-xs font-medium text-[var(--color-body)]">
+                Enable borders
+                <span className="toggle-switch">
+                  <input
+                    type="checkbox"
+                    checked={settings.borderEnabled}
+                    onChange={(event) => updateSetting('borderEnabled', event.target.checked)}
+                  />
+                  <span className="toggle-track" />
+                </span>
+              </label>
+
+              {settings.borderEnabled && (
+                <>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-medium text-[var(--color-body)]">Style</label>
+                    <Select
+                      value={settings.borderStyle}
+                      onValueChange={(v) => updateSetting('borderStyle', v as CmsSettings['borderStyle'])}
+                    >
+                      <SelectTrigger className="h-10 text-xs">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="simple">Simple line</SelectItem>
+                        <SelectItem value="double">Double line</SelectItem>
+                        <SelectItem value="decorative-corners">Decorative corners</SelectItem>
+                        <SelectItem value="custom">Custom SVG</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {settings.borderStyle !== 'custom' && (
+                    <>
+                      <SliderSetting
+                        label="Line width"
+                        value={settings.borderWidth}
+                        min={0.5} max={4} step={0.5}
+                        unit="px"
+                        onChange={(v) => updateSetting('borderWidth', v)}
+                      />
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-medium text-[var(--color-body)]">Color</label>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="color"
+                            value={settings.borderColor}
+                            onChange={(e) => updateSetting('borderColor', e.target.value)}
+                            className="h-8 w-8 cursor-pointer rounded border border-[var(--color-hairline)] p-0.5"
+                            title="Border color"
+                          />
+                          <span className="font-mono text-[11px] text-[var(--color-muted)]">{settings.borderColor}</span>
+                        </div>
+                      </div>
+                    </>
+                  )}
+
+                  <SliderSetting
+                    label="Inset (padding)"
+                    value={settings.borderPadding}
+                    min={4} max={40} step={1}
+                    unit="px"
+                    onChange={(v) => updateSetting('borderPadding', v)}
+                  />
+
+                  {settings.borderStyle === 'custom' && (
+                    <>
+                      <label className="flex items-center justify-between gap-3 rounded-lg py-1 text-xs font-medium text-[var(--color-body)]">
+                        Separate left / right borders
+                        <span className="toggle-switch">
+                          <input
+                            type="checkbox"
+                            checked={settings.borderSeparateSides}
+                            onChange={(event) => updateSetting('borderSeparateSides', event.target.checked)}
+                          />
+                          <span className="toggle-track" />
+                        </span>
+                      </label>
+
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-medium text-[var(--color-body)]">
+                          {settings.borderSeparateSides ? 'Left page border (even pages)' : 'Border SVG'}
+                        </label>
+                        {settings.borderSvgLeft ? (
+                          <div className="relative overflow-hidden rounded-md border border-[var(--color-hairline)] bg-[var(--surface-canvas)]">
+                            <img src={settings.borderSvgLeft} alt="Left border preview" className="w-full object-contain" style={{ maxHeight: 80 }} />
+                            <button
+                              type="button"
+                              onClick={() => handleBorderSvgClear('left')}
+                              className="absolute right-1.5 top-1.5 flex size-6 items-center justify-center rounded-full bg-white/90 text-[var(--color-muted)] shadow-sm hover:text-red-600 cursor-pointer"
+                              title="Remove border"
+                            >
+                              ×
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => borderSvgFileRef.current.left?.click()}
+                            className="cover-upload-btn"
+                          >
+                            <FileImage className="size-4" />
+                            {settings.borderSeparateSides ? 'Upload left border' : 'Upload border SVG'}
+                          </button>
+                        )}
+                        <input
+                          ref={(el) => { borderSvgFileRef.current.left = el }}
+                          type="file"
+                          accept="image/svg+xml,image/png,image/jpeg"
+                          className="hidden"
+                          onChange={(e) => { const f = e.target.files?.[0]; if (f) { void handleBorderSvgUpload('left', f) } e.target.value = '' }}
+                        />
+                      </div>
+
+                      {settings.borderSeparateSides && (
+                        <div className="space-y-1.5">
+                          <label className="text-xs font-medium text-[var(--color-body)]">Right page border (odd pages)</label>
+                          {settings.borderSvgRight ? (
+                            <div className="relative overflow-hidden rounded-md border border-[var(--color-hairline)] bg-[var(--surface-canvas)]">
+                              <img src={settings.borderSvgRight} alt="Right border preview" className="w-full object-contain" style={{ maxHeight: 80 }} />
+                              <button
+                                type="button"
+                                onClick={() => handleBorderSvgClear('right')}
+                                className="absolute right-1.5 top-1.5 flex size-6 items-center justify-center rounded-full bg-white/90 text-[var(--color-muted)] shadow-sm hover:text-red-600 cursor-pointer"
+                                title="Remove border"
+                              >
+                                ×
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => borderSvgFileRef.current.right?.click()}
+                              className="cover-upload-btn"
+                            >
+                              <FileImage className="size-4" />Upload right border
+                            </button>
+                          )}
+                          <input
+                            ref={(el) => { borderSvgFileRef.current.right = el }}
+                            type="file"
+                            accept="image/svg+xml,image/png,image/jpeg"
+                            className="hidden"
+                            onChange={(e) => { const f = e.target.files?.[0]; if (f) { void handleBorderSvgUpload('right', f) } e.target.value = '' }}
+                          />
+                        </div>
+                      )}
+                    </>
+                  )}
+                </>
+              )}
+            </SettingsGroup>
           </div>
         </ScrollArea>
       </TabsContent>
@@ -1358,6 +1568,7 @@ function App() {
                 onRedoSectionFlow={handleRedo}
                 canUndoSectionFlow={undoStack.length > 0}
                 canRedoSectionFlow={redoStack.length > 0}
+                borderSettings={canvasBorderSettings}
               />
           </div>
 
@@ -1401,6 +1612,7 @@ function App() {
                 onRedoSectionFlow={handleRedo}
                 canUndoSectionFlow={undoStack.length > 0}
                 canRedoSectionFlow={redoStack.length > 0}
+                borderSettings={canvasBorderSettings}
               />
           </div>
           <div className={mobileTab === 'editor' ? 'block h-full' : 'hidden'}>
