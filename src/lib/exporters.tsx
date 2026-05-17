@@ -5,6 +5,11 @@ import { downloadFile, slugify } from '@/lib/utils'
 import { PAGE_HEIGHT, PAGE_WIDTH, type CmsSettings, type RenderedPage } from '@/types/cms'
 
 export type { PdfExportProgress }
+export type SvgExportSlot = { kind: 'cover'; dataUrl: string; label: string } | { kind: 'page'; page: RenderedPage }
+export type SvgBorderSettings = Pick<
+  CmsSettings,
+  'borderEnabled' | 'borderStyle' | 'borderWidth' | 'borderColor' | 'borderPadding' | 'borderSeparateSides' | 'borderSvgLeft' | 'borderSvgRight'
+>
 
 function escapeXml(value: string) {
   return value
@@ -33,7 +38,7 @@ function shouldPageHaveBorder(page: RenderedPage, allPages: RenderedPage[]): boo
   return page.pageNumber !== firstNum && page.pageNumber !== lastNum
 }
 
-function renderSvgBorder(page: RenderedPage, settings: CmsSettings, allPages: RenderedPage[]): string {
+function renderSvgBorder(page: RenderedPage, settings: SvgBorderSettings, allPages: RenderedPage[]): string {
   if (!settings.borderEnabled || !shouldPageHaveBorder(page, allPages)) return ''
 
   const { borderStyle, borderWidth, borderColor, borderPadding, borderSeparateSides, borderSvgLeft, borderSvgRight } = settings
@@ -84,6 +89,50 @@ function renderSvgBorder(page: RenderedPage, settings: CmsSettings, allPages: Re
   }
 
   return ''
+}
+
+/** Build vertically stacked SVG markup for rendered slots (covers and content pages) with shared export spacing and border rendering. */
+function buildSvgDocumentMarkup(
+  slots: SvgExportSlot[],
+  settings?: SvgBorderSettings,
+  allRenderedPages?: RenderedPage[],
+) {
+  const spacing = 24
+  const contextPages = allRenderedPages ?? slots.flatMap((slot) => (slot.kind === 'page' ? [slot.page] : []))
+  const totalHeight = slots.length * PAGE_HEIGHT + Math.max(0, slots.length - 1) * spacing
+
+  const renderCoverSlot = (dataUrl: string, pageOffset: number, label: string) =>
+    [
+      `<g transform="translate(0 ${pageOffset})">`,
+      `<title>${escapeXml(label)}</title>`,
+      `<rect width="${PAGE_WIDTH}" height="${PAGE_HEIGHT}" fill="#ffffff"/>`,
+      `<image href="${dataUrl}" x="0" y="0" width="${PAGE_WIDTH}" height="${PAGE_HEIGHT}" preserveAspectRatio="xMidYMid meet"/>`,
+      `</g>`,
+    ].join('')
+
+  const renderPageSlot = (page: RenderedPage, pageOffset: number) => {
+    const borderMarkup = settings ? renderSvgBorder(page, settings, contextPages) : ''
+    return [
+      `<g transform="translate(0 ${pageOffset})">`,
+      `<rect width="${PAGE_WIDTH}" height="${PAGE_HEIGHT}" fill="#ffffff"/>`,
+      ...page.blocks.map((block) => renderSvgBlock(block)),
+      borderMarkup,
+      `</g>`,
+    ].join('')
+  }
+
+  const renderSlot = (slot: SvgExportSlot, index: number) => {
+    const pageOffset = index * (PAGE_HEIGHT + spacing)
+    return slot.kind === 'cover'
+      ? renderCoverSlot(slot.dataUrl, pageOffset, slot.label)
+      : renderPageSlot(slot.page, pageOffset)
+  }
+
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${PAGE_WIDTH}" height="${totalHeight}" viewBox="0 0 ${PAGE_WIDTH} ${totalHeight}">
+  <rect width="100%" height="100%" fill="#f5f5f4" />
+  ${slots.map((slot, index) => renderSlot(slot, index)).join('')}
+</svg>`
 }
 
 /** Preload jsPDF so the first export does not wait on the dynamic import. */
@@ -145,58 +194,53 @@ export function exportSvgDocument(
   title: string,
   frontCover?: string | null,
   backCover?: string | null,
-  settings?: CmsSettings,
+  settings?: SvgBorderSettings,
   allRenderedPages?: RenderedPage[],
 ) {
-  const spacing = 24
-  const contextPages = allRenderedPages ?? pages
-
-  type SvgSlot = { kind: 'cover'; dataUrl: string } | { kind: 'page'; page: RenderedPage }
-  const slots: SvgSlot[] = []
-  if (frontCover) slots.push({ kind: 'cover', dataUrl: frontCover })
+  const slots: SvgExportSlot[] = []
+  if (frontCover) slots.push({ kind: 'cover', dataUrl: frontCover, label: 'Front Cover' })
   for (const page of pages) slots.push({ kind: 'page', page })
-  if (backCover) slots.push({ kind: 'cover', dataUrl: backCover })
-
-  const totalHeight = slots.length * PAGE_HEIGHT + Math.max(0, slots.length - 1) * spacing
-
-  const renderCoverSlot = (dataUrl: string, pageOffset: number, label: string) =>
-    [
-      `<g transform="translate(0 ${pageOffset})">`,
-      `<title>${escapeXml(label)}</title>`,
-      `<rect width="${PAGE_WIDTH}" height="${PAGE_HEIGHT}" fill="#ffffff"/>`,
-      `<image href="${dataUrl}" x="0" y="0" width="${PAGE_WIDTH}" height="${PAGE_HEIGHT}" preserveAspectRatio="xMidYMid meet"/>`,
-      `</g>`,
-    ].join('')
-
-  const renderPageSlot = (page: RenderedPage, pageOffset: number) => {
-    const borderMarkup = settings ? renderSvgBorder(page, settings, contextPages) : ''
-    return [
-      `<g transform="translate(0 ${pageOffset})">`,
-      `<rect width="${PAGE_WIDTH}" height="${PAGE_HEIGHT}" fill="#ffffff"/>`,
-      ...page.blocks.map((block) => renderSvgBlock(block)),
-      borderMarkup,
-      `</g>`,
-    ].join('')
-  }
-
-  const renderSlot = (slot: SvgSlot, index: number) => {
-    const pageOffset = index * (PAGE_HEIGHT + spacing)
-    const label = slot.kind === 'cover'
-      ? (frontCover && slot.dataUrl === frontCover ? 'Front Cover' : 'Back Cover')
-      : `Page ${slot.page.pageNumber}`
-    return slot.kind === 'cover'
-      ? renderCoverSlot(slot.dataUrl, pageOffset, label)
-      : renderPageSlot(slot.page, pageOffset)
-  }
-
-  const markup = `<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${PAGE_WIDTH}" height="${totalHeight}" viewBox="0 0 ${PAGE_WIDTH} ${totalHeight}">
-  <rect width="100%" height="100%" fill="#f5f5f4" />
-  ${slots.map((slot, index) => renderSlot(slot, index)).join('')}
-</svg>`
+  if (backCover) slots.push({ kind: 'cover', dataUrl: backCover, label: 'Back Cover' })
+  const markup = buildSvgDocumentMarkup(slots, settings, allRenderedPages)
 
   const base = slugify(title) || 'college-recognition'
   const fileName = pages.length === 1 && !frontCover && !backCover ? `${base}-page-${pages[0]?.pageNumber ?? 1}` : `${base}`
 
   downloadFile(new Blob([markup], { type: 'image/svg+xml;charset=utf-8' }), `${fileName}.svg`)
+}
+
+/** Copy one preview slot to the clipboard by trying SVG/HTML/plain-text clipboard data first, then plain-text only, throwing if both strategies fail. */
+export async function copySlotAsFigmaLayout(
+  slot: SvgExportSlot,
+  settings?: SvgBorderSettings,
+  allRenderedPages?: RenderedPage[],
+) {
+  const markup = buildSvgDocumentMarkup([slot], settings, allRenderedPages)
+
+  if (typeof ClipboardItem !== 'undefined' && navigator.clipboard.write) {
+    try {
+      await navigator.clipboard.write([
+        new ClipboardItem({
+          'image/svg+xml': new Blob([markup], { type: 'image/svg+xml;charset=utf-8' }),
+          'text/html': new Blob([markup], { type: 'text/html;charset=utf-8' }),
+          'text/plain': new Blob([markup], { type: 'text/plain;charset=utf-8' }),
+        }),
+      ])
+      return
+    } catch (richClipboardError) {
+      try {
+        await navigator.clipboard.writeText(markup)
+        return
+      } catch (textClipboardError) {
+        const richMessage =
+          richClipboardError instanceof Error
+            ? richClipboardError.message
+            : 'Failed to copy the Figma layout as rich SVG clipboard data.'
+        const textMessage = textClipboardError instanceof Error ? textClipboardError.message : 'Failed to copy the Figma layout as plain text.'
+        throw new Error(`${richMessage} Fallback plain-text copy also failed: ${textMessage}`)
+      }
+    }
+  }
+
+  await navigator.clipboard.writeText(markup)
 }
