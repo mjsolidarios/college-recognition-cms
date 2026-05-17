@@ -334,7 +334,6 @@ function ProgramEditor({
                         id={rightColumnToggleId}
                         type="checkbox"
                         checked={hasRightColumn}
-                        aria-label={`Two-column row ${hasRightColumn ? 'enabled' : 'disabled'}`}
                         onChange={(event) =>
                           updateRow(row.id, (current) =>
                             event.target.checked
