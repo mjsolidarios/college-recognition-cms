@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronRight, CircleHelp, Minus, Plus, Redo2, RotateCcw, Undo2 } from 'lucide-react'
+import { Check, ChevronLeft, ChevronRight, CircleHelp, ClipboardCopy, Minus, Plus, Redo2, RotateCcw, Undo2 } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 
 import { Button } from '@/components/ui/button'
@@ -7,6 +7,7 @@ import {
   buildLayoutItemStartFlowMap,
   placementFromFlow,
 } from '@/lib/canvas-layout-items'
+import { copySlotAsFigmaLayout, type SvgBorderSettings } from '@/lib/exporters'
 import { getFontStack } from '@/lib/fonts'
 import { FLOW_POSITION_SNAP_INCREMENT, snapFlowPosition } from '@/lib/flow-position'
 import { getRenderedBlockLines } from '@/lib/layout'
@@ -356,6 +357,7 @@ export function CanvasPreview({
   const [isSpaceDown, setIsSpaceDown] = useState(false)
   const [showHints, setShowHints] = useState(() => !readHintsHiddenPreference())
   const [isDragging, setIsDragging] = useState(false)
+  const [figmaCopyState, setFigmaCopyState] = useState<'idle' | 'copied' | 'error'>('idle')
   const [itemDrag, setItemDrag] = useState<{
     pageId: string
     itemId: string
@@ -379,9 +381,28 @@ export function CanvasPreview({
   const containerRef = useRef<HTMLDivElement>(null)
   const lastPointerRef = useRef<{ x: number; y: number } | null>(null)
   const sectionCaptureRef = useRef<HTMLElement | null>(null)
+  const figmaCopyResetTimeoutRef = useRef<number | null>(null)
 
   const safeIdx = Math.min(previewPageIndex, Math.max(0, totalSlots - 1))
   const currentSlot = displaySlots[safeIdx]
+  const currentExportSlot = currentSlot
+    ? currentSlot.kind === 'cover'
+      ? { kind: 'cover' as const, dataUrl: currentSlot.dataUrl, label: currentSlot.label }
+      : { kind: 'page' as const, page: currentSlot.page }
+    : null
+  const currentExportBorderSettings: SvgBorderSettings | undefined =
+    currentExportSlot?.kind === 'page' && borderSettings
+      ? {
+          borderEnabled: borderSettings.enabled,
+          borderStyle: borderSettings.style,
+          borderWidth: borderSettings.width,
+          borderColor: borderSettings.color,
+          borderPadding: borderSettings.padding,
+          borderSeparateSides: borderSettings.separateSides,
+          borderSvgLeft: borderSettings.svgLeft,
+          borderSvgRight: borderSettings.svgRight,
+        }
+      : undefined
 
   const layoutItemStartFlowById = useMemo(() => {
     if (!currentSlot || currentSlot.kind !== 'page') {
@@ -410,6 +431,27 @@ export function CanvasPreview({
     setZoom(0.85)
     setPan({ x: 100, y: 50 })
   }
+  const setFigmaCopyFeedback = (state: 'copied' | 'error') => {
+    if (figmaCopyResetTimeoutRef.current != null) {
+      window.clearTimeout(figmaCopyResetTimeoutRef.current)
+    }
+    setFigmaCopyState(state)
+    figmaCopyResetTimeoutRef.current = window.setTimeout(() => {
+      setFigmaCopyState('idle')
+      figmaCopyResetTimeoutRef.current = null
+    }, 2200)
+  }
+  const handleCopyAsFigmaLayout = async () => {
+    if (!currentExportSlot) {
+      return
+    }
+    try {
+      await copySlotAsFigmaLayout(currentExportSlot, currentExportBorderSettings, renderedPages)
+      setFigmaCopyFeedback('copied')
+    } catch {
+      setFigmaCopyFeedback('error')
+    }
+  }
 
   // Keyboard Spacebar for panning mode
   useEffect(() => {
@@ -432,6 +474,12 @@ export function CanvasPreview({
     return () => {
       window.removeEventListener('keydown', onKeyDown)
       window.removeEventListener('keyup', onKeyUp)
+    }
+  }, [])
+
+  useEffect(() => () => {
+    if (figmaCopyResetTimeoutRef.current != null) {
+      window.clearTimeout(figmaCopyResetTimeoutRef.current)
     }
   }, [])
 
@@ -639,6 +687,21 @@ export function CanvasPreview({
             </Button>
           </div>
         )}
+
+        <div className="flex shrink-0 items-center border-r border-[var(--color-hairline-soft)] pr-1.5">
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-7 px-2 text-[11px] text-[var(--color-body)]"
+            disabled={!currentExportSlot}
+            onClick={() => void handleCopyAsFigmaLayout()}
+            title="Copy the current preview as an SVG layout for Figma"
+          >
+            {figmaCopyState === 'copied' ? <Check className="mr-1 size-3.5 shrink-0 text-emerald-600" /> : <ClipboardCopy className="mr-1 size-3.5 shrink-0" />}
+            <span>{figmaCopyState === 'copied' ? 'Copied' : figmaCopyState === 'error' ? 'Copy failed' : 'Copy Figma Layout'}</span>
+          </Button>
+        </div>
 
         {/* Zoom Controls */}
         <div className="flex shrink-0 items-center gap-1">
