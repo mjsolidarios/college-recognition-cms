@@ -382,7 +382,7 @@ export function CanvasPreview({
   const containerRef = useRef<HTMLDivElement>(null)
   const lastPointerRef = useRef<{ x: number; y: number } | null>(null)
   const sectionCaptureRef = useRef<HTMLElement | null>(null)
-  const figmaCopyResetTimeoutRef = useRef<number | null>(null)
+  const figmaCopyResetTimeoutRef = useRef<ReturnType<typeof window.setTimeout> | null>(null)
 
   const safeIdx = Math.min(previewPageIndex, Math.max(0, totalSlots - 1))
   const currentSlot = displaySlots[safeIdx]
@@ -701,7 +701,9 @@ export function CanvasPreview({
             onClick={() => void handleCopyAsFigmaLayout()}
             title="Copy the current preview as an SVG layout for Figma"
           >
-            {figmaCopyState === 'copied' ? <Check className="mr-1 size-3.5 shrink-0 text-emerald-600" /> : <ClipboardCopy className="mr-1 size-3.5 shrink-0" />}
+            {figmaCopyState === 'copied'
+              ? <Check aria-hidden className="mr-1 size-3.5 shrink-0 text-emerald-600" />
+              : <ClipboardCopy aria-hidden className="mr-1 size-3.5 shrink-0" />}
             <span>{figmaCopyState === 'copied' ? 'Copied' : figmaCopyState === 'error' ? 'Copy failed' : 'Copy Figma Layout'}</span>
           </Button>
         </div>
