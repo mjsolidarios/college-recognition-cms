@@ -239,7 +239,7 @@ function BorderOverlay({
         src={dataUrl}
         alt=""
         aria-hidden
-        className="pointer-events-none absolute inset-0 z-[5]"
+        className="pointer-events-none absolute inset-0 z-[50]"
         style={{ width: PAGE_WIDTH * zoom, height: PAGE_HEIGHT * zoom, objectFit: 'fill' }}
       />
     )
@@ -252,7 +252,7 @@ function BorderOverlay({
     return (
       <div
         aria-hidden
-        className="pointer-events-none absolute z-[5]"
+        className="pointer-events-none absolute z-[50]"
         style={{
           top: pad,
           left: pad,
@@ -270,12 +270,12 @@ function BorderOverlay({
       <>
         <div
           aria-hidden
-          className="pointer-events-none absolute z-[5]"
+          className="pointer-events-none absolute z-[50]"
           style={{ top: pad, left: pad, right: pad, bottom: pad, border: `${bw}px solid ${color}` }}
         />
         <div
           aria-hidden
-          className="pointer-events-none absolute z-[5]"
+          className="pointer-events-none absolute z-[50]"
           style={{
             top: pad + gap,
             left: pad + gap,
@@ -300,7 +300,7 @@ function BorderOverlay({
     return (
       <svg
         aria-hidden
-        className="pointer-events-none absolute inset-0 z-[5]"
+        className="pointer-events-none absolute inset-0 z-[50]"
         width={PAGE_WIDTH * zoom}
         height={PAGE_HEIGHT * zoom}
         style={{ overflow: 'visible' }}
