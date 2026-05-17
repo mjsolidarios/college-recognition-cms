@@ -30,7 +30,7 @@ import {
   applyPageLayoutFlowMap,
   pageContainsLayoutItem,
   repositionLayoutItemWithReflow,
-  type LayoutItemFlowReflowCommand,
+  type UndoRedoCommand,
 } from '@/lib/layout-item-flow'
 import { previewSlotIndexForLayoutItem, previewSlotIndexForPageId } from '@/lib/preview-navigation'
 import { renderDocument } from '@/lib/layout'
@@ -252,8 +252,8 @@ function App() {
 
   const [previewPageIndex, setPreviewPageIndex] = useState(0)
   const [coverUploadError, setCoverUploadError] = useState<string | null>(null)
-  const [layoutFlowUndo, setLayoutFlowUndo] = useState<LayoutItemFlowReflowCommand[]>([])
-  const [layoutFlowRedo, setLayoutFlowRedo] = useState<LayoutItemFlowReflowCommand[]>([])
+  const [undoStack, setUndoStack] = useState<UndoRedoCommand[]>([])
+  const [redoStack, setRedoStack] = useState<UndoRedoCommand[]>([])
   const [focusedLayoutItemId, setFocusedLayoutItemId] = useState<string | null>(null)
   const [saveStatus, setSaveStatus] = useState<'saving' | 'saved' | 'error'>('saved')
   const [saveError, setSaveError] = useState<string | null>(null)
@@ -454,9 +454,9 @@ function App() {
     }, 600)
   }
 
-  const clearLayoutFlowHistory = useCallback(() => {
-    setLayoutFlowUndo([])
-    setLayoutFlowRedo([])
+  const clearUndoRedoHistory = useCallback(() => {
+    setUndoStack([])
+    setRedoStack([])
   }, [])
 
   const handleLayoutItemReposition = (pageId: string, itemId: string, flowPosition: number) => {
@@ -470,36 +470,50 @@ function App() {
     if (!result) {
       return
     }
-    setLayoutFlowUndo((stack) => [
+    setUndoStack((stack) => [
       ...stack,
-      { pageId, movedItemId: itemId, before: result.before, after: result.after },
+      { type: 'layoutFlow', data: { pageId, movedItemId: itemId, before: result.before, after: result.after } },
     ])
-    setLayoutFlowRedo([])
+    setRedoStack([])
     persistPages(result.pages)
   }
 
-  const handleUndoLayoutFlow = useCallback(() => {
-    setLayoutFlowUndo((stack) => {
+  const handleUndo = useCallback(() => {
+    setUndoStack((stack) => {
       if (stack.length === 0) {
         return stack
       }
       const cmd = stack[stack.length - 1]!
-      setLayoutFlowRedo((redo) => [...redo, cmd])
-      persistPages(applyPageLayoutFlowMap(pagesRef.current, cmd.pageId, cmd.before))
+      setRedoStack((redo) => [...redo, cmd])
+      if (cmd.type === 'layoutFlow') {
+        persistPages(applyPageLayoutFlowMap(pagesRef.current, cmd.data.pageId, cmd.data.before))
+      } else {
+        persistPages(pagesRef.current.map((p) => (p.id === cmd.data.pageId ? cmd.data.before : p)))
+      }
       return stack.slice(0, -1)
     })
   }, [])
 
-  const handleRedoLayoutFlow = useCallback(() => {
-    setLayoutFlowRedo((stack) => {
+  const handleRedo = useCallback(() => {
+    setRedoStack((stack) => {
       if (stack.length === 0) {
         return stack
       }
       const cmd = stack[stack.length - 1]!
-      setLayoutFlowUndo((undo) => [...undo, cmd])
-      persistPages(applyPageLayoutFlowMap(pagesRef.current, cmd.pageId, cmd.after))
+      setUndoStack((undo) => [...undo, cmd])
+      if (cmd.type === 'layoutFlow') {
+        persistPages(applyPageLayoutFlowMap(pagesRef.current, cmd.data.pageId, cmd.data.after))
+      } else {
+        persistPages(pagesRef.current.map((p) => (p.id === cmd.data.pageId ? cmd.data.after : p)))
+      }
       return stack.slice(0, -1)
     })
+  }, [])
+
+  const handlePageMutation = useCallback((before: CmsPage, after: CmsPage) => {
+    setUndoStack((stack) => [...stack, { type: 'pageMutation', data: { pageId: before.id, before, after } }])
+    setRedoStack([])
+    persistPages(pagesRef.current.map((p) => (p.id === after.id ? after : p)))
   }, [])
 
   useEffect(() => {
@@ -520,17 +534,17 @@ function App() {
       }
       if (event.key === 'z' && !event.shiftKey) {
         event.preventDefault()
-        handleUndoLayoutFlow()
+        handleUndo()
         return
       }
       if (event.key === 'y' || (event.key === 'z' && event.shiftKey)) {
         event.preventDefault()
-        handleRedoLayoutFlow()
+        handleRedo()
       }
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [handleRedoLayoutFlow, handleUndoLayoutFlow])
+  }, [handleRedo, handleUndo])
 
   const handleAddPage = (pageType: PageType) => {
     const page = createBlankPage(pageType, pages.length)
@@ -659,7 +673,7 @@ function App() {
         return
       }
       pulseSavedStatus()
-      clearLayoutFlowHistory()
+      clearUndoRedoHistory()
       void resetCmsDocument()
         .then((state) => {
           applyLoadedState(state)
@@ -837,6 +851,7 @@ function App() {
               onChange={handlePageChange}
               selectedLayoutItemId={focusedLayoutItemId}
               onLayoutItemSelect={handleLayoutItemSelect}
+              onPageMutation={handlePageMutation}
             />
           ) : null}
         </ScrollArea>
@@ -1339,10 +1354,10 @@ function App() {
                 onLayoutItemReposition={handleLayoutItemReposition}
                 focusedLayoutItem={focusedLayoutItem}
                 onLayoutItemSelect={handleLayoutItemSelect}
-                onUndoSectionFlow={handleUndoLayoutFlow}
-                onRedoSectionFlow={handleRedoLayoutFlow}
-                canUndoSectionFlow={layoutFlowUndo.length > 0}
-                canRedoSectionFlow={layoutFlowRedo.length > 0}
+                onUndoSectionFlow={handleUndo}
+                onRedoSectionFlow={handleRedo}
+                canUndoSectionFlow={undoStack.length > 0}
+                canRedoSectionFlow={redoStack.length > 0}
               />
           </div>
 
@@ -1382,10 +1397,10 @@ function App() {
                 onLayoutItemReposition={handleLayoutItemReposition}
                 focusedLayoutItem={focusedLayoutItem}
                 onLayoutItemSelect={handleLayoutItemSelect}
-                onUndoSectionFlow={handleUndoLayoutFlow}
-                onRedoSectionFlow={handleRedoLayoutFlow}
-                canUndoSectionFlow={layoutFlowUndo.length > 0}
-                canRedoSectionFlow={layoutFlowRedo.length > 0}
+                onUndoSectionFlow={handleUndo}
+                onRedoSectionFlow={handleRedo}
+                canUndoSectionFlow={undoStack.length > 0}
+                canRedoSectionFlow={redoStack.length > 0}
               />
           </div>
           <div className={mobileTab === 'editor' ? 'block h-full' : 'hidden'}>

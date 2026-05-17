@@ -17,6 +17,16 @@ export type LayoutItemFlowReflowCommand = {
 /** @deprecated Use LayoutItemFlowReflowCommand */
 export type SectionFlowReflowCommand = LayoutItemFlowReflowCommand
 
+export type PageMutationCommand = {
+  pageId: string
+  before: CmsPage
+  after: CmsPage
+}
+
+export type UndoRedoCommand =
+  | { type: 'layoutFlow'; data: LayoutItemFlowReflowCommand }
+  | { type: 'pageMutation'; data: PageMutationCommand }
+
 export function flowPositionsEqual(a: number | undefined, b: number | undefined): boolean {
   return normalizeFlowPosition(a) === normalizeFlowPosition(b)
 }

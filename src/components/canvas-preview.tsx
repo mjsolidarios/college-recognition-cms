@@ -492,7 +492,7 @@ export function CanvasPreview({
               className="size-7 text-[var(--color-ink)]"
               disabled={!canUndoSectionFlow}
               onClick={onUndoSectionFlow}
-              title="Undo section move (Ctrl+Z)"
+              title="Undo (Ctrl+Z)"
             >
               <Undo2 className="size-3.5 shrink-0" />
             </Button>
@@ -503,7 +503,7 @@ export function CanvasPreview({
               className="size-7 text-[var(--color-ink)]"
               disabled={!canRedoSectionFlow}
               onClick={onRedoSectionFlow}
-              title="Redo section move (Ctrl+Y)"
+              title="Redo (Ctrl+Y)"
             >
               <Redo2 className="size-3.5 shrink-0" />
             </Button>
