@@ -41,13 +41,25 @@ function textX(block: RenderTextBlock) {
   return block.x
 }
 
+function pdfFontFamily(fontFamily: RenderTextBlock['fontFamily']) {
+  switch (fontFamily) {
+    case 'times':
+    case 'lora':
+    case 'merriweather':
+    case 'playfair-display':
+      return 'times'
+    default:
+      return 'helvetica'
+  }
+}
+
 function drawBlock(doc: jsPDF, block: RenderTextBlock) {
   const lines = getRenderedBlockLines(block)
   if (!lines.length) {
     return
   }
 
-  doc.setFont(block.fontFamily, pdfFontStyle(block))
+  doc.setFont(pdfFontFamily(block.fontFamily), pdfFontStyle(block))
   doc.setFontSize(block.fontSize)
   doc.setTextColor(38, 37, 30)
 
