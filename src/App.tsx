@@ -1,5 +1,6 @@
 import {
   BookOpen,
+  CheckCircle2,
   ChevronDown,
   Download,
   FileImage,
@@ -215,6 +216,7 @@ function SliderSetting({
 const MIN_EDITOR_WIDTH = 280
 const MAX_EDITOR_WIDTH = 560
 const DEFAULT_EDITOR_WIDTH = 360
+const DISPLAY_ITEM_ID_LENGTH = 12
 /** Wait two animation frames: one for React to commit, one for the browser to paint the exporting state. */
 const waitForUiUpdate = () =>
   new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())))
@@ -237,7 +239,9 @@ function App() {
   const [layoutFlowUndo, setLayoutFlowUndo] = useState<LayoutItemFlowReflowCommand[]>([])
   const [layoutFlowRedo, setLayoutFlowRedo] = useState<LayoutItemFlowReflowCommand[]>([])
   const [focusedLayoutItemId, setFocusedLayoutItemId] = useState<string | null>(null)
+  const [saveStatus, setSaveStatus] = useState<'saving' | 'saved'>('saved')
   const pagesRef = useRef(pages)
+  const saveStatusTimeoutRef = useRef<number | null>(null)
   pagesRef.current = pages
 
   const activePage = useMemo(
@@ -251,6 +255,25 @@ function App() {
 
   useEffect(() => {
     warmPdfExportWorker()
+  }, [])
+
+  useEffect(
+    () => () => {
+      if (saveStatusTimeoutRef.current !== null) {
+        window.clearTimeout(saveStatusTimeoutRef.current)
+      }
+    },
+    [],
+  )
+
+  const pulseSavedStatus = useCallback(() => {
+    setSaveStatus('saving')
+    if (saveStatusTimeoutRef.current !== null) {
+      window.clearTimeout(saveStatusTimeoutRef.current)
+    }
+    saveStatusTimeoutRef.current = window.setTimeout(() => {
+      setSaveStatus('saved')
+    }, 260)
   }, [])
 
   useEffect(() => {
@@ -267,6 +290,7 @@ function App() {
   }, [activePage, focusedLayoutItemId])
 
   const persistPages = (nextPages: CmsPage[]) => {
+    pulseSavedStatus()
     const orderedPages = [...nextPages].sort((left, right) => left.order - right.order)
     let persistedPages = orderedPages
     orderedPages.forEach((page) => {
@@ -366,6 +390,15 @@ function App() {
   }
 
   const handleDeletePage = (pageId: string) => {
+    if (pages.length <= 1) {
+      window.alert('Cannot delete the last page. Add a new page before deleting this one.')
+      return
+    }
+    const page = pages.find((entry) => entry.id === pageId)
+    const ok = window.confirm(`Delete "${page?.title ?? 'this page'}"? This action cannot be undone.`)
+    if (!ok) {
+      return
+    }
     const nextPages = deletePage(pageId).map((page, index) => ({ ...page, order: index }))
     persistPages(nextPages)
     setActivePageId((current) => (current === pageId ? nextPages[0]?.id ?? '' : current))
@@ -411,16 +444,27 @@ function App() {
   )
 
   const updateSetting = <K extends keyof CmsSettings>(key: K, value: CmsSettings[K]) => {
+    pulseSavedStatus()
     const nextSettings = { ...settings, [key]: value }
     setSettings(saveSettings(nextSettings))
   }
 
   const handleResetSettings = () => {
+    const ok = window.confirm('Reset all settings to defaults? Page content and title will not be changed.')
+    if (!ok) {
+      return
+    }
+    pulseSavedStatus()
     const next = { ...defaultSettings }
     setSettings(saveSettings(next))
   }
 
   const handleReset = () => {
+    const ok = window.confirm('Reset the entire document to seed content? This removes custom pages, settings, and covers.')
+    if (!ok) {
+      return
+    }
+    pulseSavedStatus()
     clearLayoutFlowHistory()
     pages.forEach((page) => {
       deletePage(page.id)
@@ -463,6 +507,7 @@ function App() {
   }
 
   const handleImport = (importedPages: CmsPage[], importedSettings?: CmsSettings, importedTitle?: string, importedFrontCover?: string | null, importedBackCover?: string | null) => {
+    pulseSavedStatus()
     // Clear existing pages from storage first
     pages.forEach((page) => deletePage(page.id))
     persistPages(importedPages)
@@ -539,6 +584,7 @@ function App() {
     })
 
   const handleCoverUpload = async (which: 'front' | 'back', file: File) => {
+    pulseSavedStatus()
     setCoverUploadError(null)
     try {
       const dataUrl = await loadCoverFile(file)
@@ -555,6 +601,7 @@ function App() {
   }
 
   const handleCoverClear = (which: 'front' | 'back') => {
+    pulseSavedStatus()
     if (which === 'front') {
       saveFrontCover(null)
       setFrontCover(null)
@@ -870,76 +917,112 @@ function App() {
             </div>
 
             {/* Controls */}
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex flex-wrap items-center gap-3">
               {/* Document title */}
-              <div className="relative">
-                <FileText className="pointer-events-none absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-[var(--color-muted)]" />
-                <input
-                  value={documentTitle}
-                  onChange={(event) => setDocumentTitle(event.target.value)}
-                  className="h-10 w-48 rounded-md border border-[var(--color-hairline)] bg-[var(--surface-canvas)] pl-9 pr-3 text-xs text-[var(--color-ink)] placeholder:text-[var(--color-muted-soft)] transition-colors focus:border-[var(--color-primary)] focus:outline-none focus:ring-2 focus:ring-[color:color-mix(in_srgb,var(--color-primary)_18%,transparent)] sm:w-56"
-                  placeholder="Document title"
-                />
+              <div className="flex flex-col gap-1">
+                <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--color-muted-soft)]">Document</span>
+                <div className="relative">
+                  <FileText className="pointer-events-none absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-[var(--color-muted)]" />
+                  <input
+                    value={documentTitle}
+                    onChange={(event) => setDocumentTitle(event.target.value)}
+                    className="h-10 w-48 rounded-md border border-[var(--color-hairline)] bg-[var(--surface-canvas)] pl-9 pr-3 text-xs text-[var(--color-ink)] placeholder:text-[var(--color-muted-soft)] transition-colors focus:border-[var(--color-primary)] focus:outline-none focus:ring-2 focus:ring-[color:color-mix(in_srgb,var(--color-primary)_18%,transparent)] sm:w-56"
+                    placeholder="Document title"
+                    aria-label="Document title"
+                  />
+                </div>
               </div>
 
-              <div className="hidden h-5 w-px bg-[var(--color-hairline)] sm:block" />
+              <div className="hidden h-9 w-px bg-[var(--color-hairline)] sm:block" />
 
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="h-9 border border-[var(--color-hairline)] bg-white px-3 text-xs text-[var(--color-body)] hover:border-[var(--color-hairline-strong)] hover:bg-[var(--surface-canvas)] hover:text-[var(--color-ink)]"
-                onClick={handleReset}
-              >
-                <RefreshCw className="size-3.5" />
-                <span className="hidden sm:inline">Reset</span>
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="h-9 border border-[var(--color-hairline)] bg-white px-3 text-xs text-[var(--color-body)] hover:border-[var(--color-hairline-strong)] hover:bg-[var(--surface-canvas)] hover:text-[var(--color-ink)]"
-                onClick={handleExportSvg}
-              >
-                <FileImage className="size-3.5" />
-                <span className="hidden sm:inline">SVG</span>
-              </Button>
-              <ExportDialog pages={pages} settings={settings} title={documentTitle} frontCover={frontCover} backCover={backCover} />
-              <ImportDialog pages={pages} onImport={handleImport} />
-              <div className="flex min-w-[7.5rem] flex-col items-stretch gap-1">
+              <div className="flex flex-col gap-1">
+                <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--color-muted-soft)]">File</span>
+                <div className="flex flex-wrap items-center gap-2">
+                  <ImportDialog pages={pages} onImport={handleImport} />
+                  <ExportDialog pages={pages} settings={settings} title={documentTitle} frontCover={frontCover} backCover={backCover} />
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-1">
+                <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--color-muted-soft)]">Export</span>
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-9 border border-[var(--color-hairline)] bg-white px-3 text-xs text-[var(--color-body)] hover:border-[var(--color-hairline-strong)] hover:bg-[var(--surface-canvas)] hover:text-[var(--color-ink)]"
+                    onClick={handleExportSvg}
+                  >
+                    <FileImage className="size-3.5" />
+                    <span className="hidden sm:inline">SVG</span>
+                  </Button>
+                  <div className="flex min-w-[7.5rem] flex-col items-stretch gap-1">
+                    <Button
+                      type="button"
+                      size="sm"
+                      className="h-9 px-3 text-xs"
+                      onClick={handleExportPdf}
+                      disabled={isExporting || renderedPages.length === 0}
+                    >
+                      {isExporting ? (
+                        <Loader2 className="size-3.5 animate-spin" />
+                      ) : (
+                        <Download className="size-3.5" />
+                      )}
+                      <span className="max-w-[9rem] truncate">
+                        {isExporting ? (pdfExportProgress?.message ?? 'Exporting…') : 'Export PDF'}
+                      </span>
+                    </Button>
+                    {isExporting && pdfExportProgress ? (
+                      <div
+                        className="h-1 overflow-hidden rounded-full bg-[var(--surface-strong)]"
+                        role="progressbar"
+                        aria-valuemin={0}
+                        aria-valuemax={100}
+                        aria-valuenow={progressPercent(pdfExportProgress)}
+                        aria-label={pdfExportProgress.message}
+                      >
+                        <div
+                          className="h-full rounded-full bg-[var(--color-primary)] transition-[width] duration-300 ease-out"
+                          style={{ width: `${progressPercent(pdfExportProgress)}%` }}
+                        />
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-1">
+                <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--color-muted-soft)]">Reset</span>
                 <Button
                   type="button"
+                  variant="ghost"
                   size="sm"
-                  className="h-9 px-3 text-xs"
-                  onClick={handleExportPdf}
-                  disabled={isExporting || renderedPages.length === 0}
+                  className="h-9 border border-[var(--color-hairline)] bg-white px-3 text-xs text-[var(--color-body)] hover:border-[var(--color-hairline-strong)] hover:bg-[var(--surface-canvas)] hover:text-[var(--color-ink)]"
+                  onClick={handleReset}
                 >
-                  {isExporting ? (
-                    <Loader2 className="size-3.5 animate-spin" />
-                  ) : (
-                    <Download className="size-3.5" />
-                  )}
-                  <span className="max-w-[9rem] truncate">
-                    {isExporting ? (pdfExportProgress?.message ?? 'Exporting…') : 'Export PDF'}
-                  </span>
+                  <RefreshCw className="size-3.5" />
+                  <span className="hidden sm:inline">Reset document</span>
                 </Button>
-                {isExporting && pdfExportProgress ? (
-                  <div
-                    className="h-1 overflow-hidden rounded-full bg-[var(--surface-strong)]"
-                    role="progressbar"
-                    aria-valuemin={0}
-                    aria-valuemax={100}
-                    aria-valuenow={progressPercent(pdfExportProgress)}
-                    aria-label={pdfExportProgress.message}
-                  >
-                    <div
-                      className="h-full rounded-full bg-[var(--color-primary)] transition-[width] duration-300 ease-out"
-                      style={{ width: `${progressPercent(pdfExportProgress)}%` }}
-                    />
-                  </div>
-                ) : null}
               </div>
             </div>
+          </div>
+          <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-[var(--color-hairline-soft)] pt-2">
+            <span className="rounded-full bg-[var(--surface-canvas)] px-2 py-0.5 text-[10px] font-medium text-[var(--color-muted)]">
+              Active: {activePage?.title ?? 'No page'} · {activePage ? PAGE_LABELS[activePage.type] : '—'}
+            </span>
+            <span
+              className="rounded-full bg-[var(--surface-canvas)] px-2 py-0.5 text-[10px] font-medium text-[var(--color-muted)]"
+              title={focusedLayoutItemId ?? undefined}
+            >
+              Selection: {focusedLayoutItemId
+                ? `Item ${focusedLayoutItemId.slice(0, DISPLAY_ITEM_ID_LENGTH)}${focusedLayoutItemId.length > DISPLAY_ITEM_ID_LENGTH ? '…' : ''}`
+                : 'None'}
+            </span>
+            <span className="inline-flex items-center gap-1 rounded-full bg-[var(--surface-canvas)] px-2 py-0.5 text-[10px] font-medium text-[var(--color-muted)]">
+              <CheckCircle2 className="size-3" />
+              {saveStatus === 'saving' ? 'Saving content…' : 'Content saved locally'}
+            </span>
           </div>
         </header>
 

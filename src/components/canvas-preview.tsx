@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronRight, Minus, Plus, Redo2, Undo2 } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Minus, Plus, Redo2, RotateCcw, Undo2 } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 
 import { Button } from '@/components/ui/button'
@@ -205,6 +205,7 @@ export function CanvasPreview({
   const [zoom, setZoom] = useState(0.85)
   const [pan, setPan] = useState({ x: 100, y: 50 })
   const [isSpaceDown, setIsSpaceDown] = useState(false)
+  const [showHints, setShowHints] = useState(true)
   const [isDragging, setIsDragging] = useState(false)
   const [itemDrag, setItemDrag] = useState<{
     pageId: string
@@ -256,6 +257,10 @@ export function CanvasPreview({
 
   const goToPrev = () => onPreviewPageChange(Math.max(0, safeIdx - 1))
   const goToNext = () => onPreviewPageChange(Math.min(totalSlots - 1, safeIdx + 1))
+  const resetView = () => {
+    setZoom(0.85)
+    setPan({ x: 100, y: 50 })
+  }
 
   // Keyboard Spacebar for panning mode
   useEffect(() => {
@@ -499,8 +504,38 @@ export function CanvasPreview({
           <span className="w-10 text-center font-mono text-[11px] font-medium tabular-nums text-[var(--color-muted)]">
             {Math.round(zoom * 100)}%
           </span>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-7 px-2 text-[11px] text-[var(--color-body)]"
+            onClick={resetView}
+            title="Reset zoom and pan"
+          >
+            <RotateCcw className="mr-1 size-3.5 shrink-0" />
+            Reset view
+          </Button>
         </div>
       </div>
+
+      {showHints ? (
+        <div className="flex flex-wrap items-start gap-2 border-b border-[var(--color-hairline-soft)] bg-[var(--surface-canvas)] px-4 py-2 text-[11px] text-[var(--color-muted)]">
+          <ul className="m-0 flex min-w-0 flex-1 list-disc flex-wrap items-center gap-x-6 gap-y-1 pl-4">
+            <li>Hold <kbd className="rounded border border-[var(--color-hairline)] bg-white px-1">Space</kbd> + drag to pan</li>
+            <li>Scroll to pan</li>
+            <li><kbd className="rounded border border-[var(--color-hairline)] bg-white px-1">Ctrl/⌘</kbd> + wheel to zoom</li>
+            <li>Select an item in Editor, then drag highlighted overlay to reflow</li>
+          </ul>
+          <button
+            type="button"
+            className="text-[11px] font-medium text-[var(--color-primary)] underline"
+            aria-label="Hide canvas navigation tips"
+            onClick={() => setShowHints(false)}
+          >
+            Hide tips
+          </button>
+        </div>
+      ) : null}
 
       {/* Infinite Canvas Viewport */}
       <div
@@ -667,7 +702,22 @@ export function CanvasPreview({
             ? `${currentSlot.label} (${safeIdx + 1} of ${totalSlots})`
             : `Page ${totalSlots > 0 ? safeIdx + 1 : 0} of ${totalSlots}`}
         </div>
-        <div className="flex items-center gap-1">
+        <div className="flex flex-wrap items-center justify-end gap-1.5">
+          <label className="sr-only" htmlFor="canvas-jump-page">
+            Jump to preview page
+          </label>
+          <select
+            id="canvas-jump-page"
+            value={safeIdx}
+            onChange={(event) => onPreviewPageChange(Number(event.target.value))}
+            className="h-8 rounded-md border border-[var(--color-hairline)] bg-white px-2 text-xs text-[var(--color-body)]"
+          >
+            {displaySlots.map((slot, index) => (
+              <option key={`${slot.kind}-${index}`} value={index}>
+                {slot.kind === 'cover' ? slot.label : `Page ${slot.page.pageNumber}`}
+              </option>
+            ))}
+          </select>
           <Button
             type="button"
             variant="outline"

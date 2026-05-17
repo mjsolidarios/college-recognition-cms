@@ -2,7 +2,15 @@ export const PAGE_WIDTH = 600
 export const PAGE_HEIGHT = 888
 
 export type PageType = 'program' | 'academic' | 'non-academic' | 'core'
-export type FontPreset = 'times' | 'helvetica'
+export type FontPreset =
+  | 'times'
+  | 'helvetica'
+  | 'inter'
+  | 'montserrat'
+  | 'poppins'
+  | 'lora'
+  | 'merriweather'
+  | 'playfair-display'
 
 export interface ProgramRow {
   id: string
