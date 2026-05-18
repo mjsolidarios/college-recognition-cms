@@ -459,6 +459,7 @@ export function CanvasPreview({
         setIsSpaceDown(true)
       }
       if (e.code === 'Escape') {
+        e.preventDefault()
         setIsFocusMode(false)
       }
     }
