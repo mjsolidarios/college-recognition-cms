@@ -923,18 +923,25 @@ function packFlowPositions<T extends FlowOrderedItem>(
   overrides: Record<string, number> = {},
 ): Map<string, number> {
   const entries = items.map((item, index) => {
+    const hasOverride = Object.prototype.hasOwnProperty.call(overrides, item.id)
     const desired =
       overrides[item.id] ??
       (isValidFlowPosition(item.flowPosition) ? item.flowPosition : implicit.get(item.id) ?? 0)
     return {
       item,
       index,
+      hasOverride,
       desired: snapFlowPosition(desired),
       span: spanById.get(item.id) ?? FLOW_PACK_GAP,
     }
   })
 
-  entries.sort((left, right) => left.desired - right.desired || left.index - right.index)
+  entries.sort(
+    (left, right) =>
+      left.desired - right.desired ||
+      Number(right.hasOverride) - Number(left.hasOverride) ||
+      left.index - right.index,
+  )
 
   const resolved = new Map<string, number>()
   let cursor = 0

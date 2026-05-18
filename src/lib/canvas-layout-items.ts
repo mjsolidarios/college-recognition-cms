@@ -94,23 +94,24 @@ export function buildLayoutItemOverlays(
   renderedPage: RenderedPage,
   startFlowByItemId: Map<string, number>,
 ): LayoutItemOverlay[] {
-  const grouped = new Map<string, RenderedPage['blocks']>()
+  const grouped = new Map<string, { itemId: string; column: 0 | 1; blocks: RenderedPage['blocks'] }>()
 
   for (const block of renderedPage.blocks) {
     if (!block.sectionId) {
       continue
     }
-    const list = grouped.get(block.sectionId) ?? []
-    list.push(block)
-    grouped.set(block.sectionId, list)
+    const column = inferColumnFromHorizontalBounds(block.x, block.x + block.width)
+    const key = `${block.sectionId}:${column}`
+    const group = grouped.get(key) ?? { itemId: block.sectionId, column, blocks: [] }
+    group.blocks.push(block)
+    grouped.set(key, group)
   }
 
-  return [...grouped.entries()].map(([itemId, blocks]) => {
+  return [...grouped.values()].map(({ itemId, column, blocks }) => {
     const left = Math.min(...blocks.map((block) => block.x))
     const top = Math.min(...blocks.map((block) => block.y))
     const right = Math.max(...blocks.map((block) => block.x + block.width))
     const bottom = Math.max(...blocks.map((block) => block.y + block.lines.length * block.lineHeight))
-    const column = inferColumnFromHorizontalBounds(left, right)
     const fallbackFlow = flowFromPlacement(
       renderedPage.sourcePageLocalIndex,
       column,
@@ -121,7 +122,7 @@ export function buildLayoutItemOverlays(
     )
 
     return {
-      id: itemId,
+      id: `${itemId}-${renderedPage.sourcePageLocalIndex}-${column}`,
       itemId,
       left,
       top,

@@ -247,6 +247,7 @@ function App() {
   const [pdfExportProgress, setPdfExportProgress] = useState<PdfExportProgress | null>(null)
   const [mobileTab, setMobileTab] = useState<MobileTab>('canvas')
   const [isPagesPanelCollapsed, setIsPagesPanelCollapsed] = useState(false)
+  const [isCanvasFocusMode, setIsCanvasFocusMode] = useState(false)
   const [editorWidth, setEditorWidth] = useState(DEFAULT_EDITOR_WIDTH)
   const dragRef = useRef<{ startX: number; startWidth: number } | null>(null)
 
@@ -1327,6 +1328,27 @@ function App() {
     </Tabs>
   )
 
+  const renderCanvasPreview = () => (
+    <CanvasPreview
+      renderedPages={renderedPages}
+      previewPageIndex={safePreviewPageIndex}
+      onPreviewPageChange={setPreviewPageIndex}
+      frontCover={frontCover}
+      backCover={backCover}
+      onLayoutItemReposition={handleLayoutItemReposition}
+      focusedLayoutItem={focusedLayoutItem}
+      onLayoutItemSelect={handleLayoutItemSelect}
+      onUndoSectionFlow={handleUndo}
+      onRedoSectionFlow={handleRedo}
+      canUndoSectionFlow={undoStack.length > 0}
+      canRedoSectionFlow={redoStack.length > 0}
+      borderSettings={canvasBorderSettings}
+      isFocusMode={isCanvasFocusMode}
+      onEnterFocusMode={() => setIsCanvasFocusMode(true)}
+      onExitFocusMode={() => setIsCanvasFocusMode(false)}
+    />
+  )
+
   if (supabaseConfigError) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-[var(--surface-app)] px-4">
@@ -1362,6 +1384,14 @@ function App() {
             Confirm the <code className="rounded bg-white/80 px-1">cms_documents</code> table exists and RLS policies are applied.
           </p>
         </div>
+      </div>
+    )
+  }
+
+  if (isCanvasFocusMode) {
+    return (
+      <div className="h-screen bg-[var(--surface-app)] text-[var(--color-ink)]">
+        {renderCanvasPreview()}
       </div>
     )
   }
@@ -1556,21 +1586,7 @@ function App() {
 
           {/* Canvas */}
           <div className="min-w-0 flex-1">
-              <CanvasPreview
-                renderedPages={renderedPages}
-                previewPageIndex={safePreviewPageIndex}
-                onPreviewPageChange={setPreviewPageIndex}
-                frontCover={frontCover}
-                backCover={backCover}
-                onLayoutItemReposition={handleLayoutItemReposition}
-                focusedLayoutItem={focusedLayoutItem}
-                onLayoutItemSelect={handleLayoutItemSelect}
-                onUndoSectionFlow={handleUndo}
-                onRedoSectionFlow={handleRedo}
-                canUndoSectionFlow={undoStack.length > 0}
-                canRedoSectionFlow={redoStack.length > 0}
-                borderSettings={canvasBorderSettings}
-              />
+            {renderCanvasPreview()}
           </div>
 
           <div
@@ -1600,21 +1616,7 @@ function App() {
             />
           </div>
           <div className={mobileTab === 'canvas' ? 'block h-full' : 'hidden'}>
-              <CanvasPreview
-                renderedPages={renderedPages}
-                previewPageIndex={safePreviewPageIndex}
-                onPreviewPageChange={setPreviewPageIndex}
-                frontCover={frontCover}
-                backCover={backCover}
-                onLayoutItemReposition={handleLayoutItemReposition}
-                focusedLayoutItem={focusedLayoutItem}
-                onLayoutItemSelect={handleLayoutItemSelect}
-                onUndoSectionFlow={handleUndo}
-                onRedoSectionFlow={handleRedo}
-                canUndoSectionFlow={undoStack.length > 0}
-                canRedoSectionFlow={redoStack.length > 0}
-                borderSettings={canvasBorderSettings}
-              />
+            {renderCanvasPreview()}
           </div>
           <div className={mobileTab === 'editor' ? 'block h-full' : 'hidden'}>
             {EditorSettingsPanel}

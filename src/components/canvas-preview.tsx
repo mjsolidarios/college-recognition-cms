@@ -1,10 +1,24 @@
-import { Check, ChevronLeft, ChevronRight, CircleHelp, ClipboardCopy, Minus, Plus, Redo2, RotateCcw, Undo2 } from 'lucide-react'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import {
+  Check,
+  ChevronLeft,
+  ChevronRight,
+  CircleHelp,
+  ClipboardCopy,
+  Maximize2,
+  Minimize2,
+  Minus,
+  Plus,
+  Redo2,
+  RotateCcw,
+  Undo2,
+} from 'lucide-react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { Button } from '@/components/ui/button'
 import {
   buildLayoutItemOverlays,
   buildLayoutItemStartFlowMap,
+  flowFromPlacement,
   placementFromFlow,
 } from '@/lib/canvas-layout-items'
 import { copySlotAsFigmaLayout, type SvgBorderSettings } from '@/lib/exporters'
@@ -12,12 +26,13 @@ import { getFontStack } from '@/lib/fonts'
 import { FLOW_POSITION_SNAP_INCREMENT, snapFlowPosition } from '@/lib/flow-position'
 import { getRenderedBlockLines } from '@/lib/layout'
 import { cn } from '@/lib/utils'
-import { PAGE_HEIGHT, PAGE_WIDTH, type BorderStyle, type RenderedPage } from '@/types/cms'
+import { PAGE_HEIGHT, PAGE_WIDTH, type BorderStyle, type PageType, type RenderedPage } from '@/types/cms'
 
 const RULER_SIZE = 24
 const RULER_FONT = `7.5px 'JetBrains Mono', 'Fira Code', monospace`
 const CANVAS_HINTS_HIDDEN_KEY = 'cms_canvas_hints_hidden'
 const FIGMA_COPY_FEEDBACK_DURATION_MS = 2200
+const PAGE_CENTER_X = PAGE_WIDTH / 2
 
 function readHintsHiddenPreference(): boolean {
   if (typeof window === 'undefined') {
@@ -46,6 +61,13 @@ function releasePointerCaptureIfHeld(target: EventTarget | null, pointerId: numb
 /** DOM height required to show all precomputed lines for a text block at the current zoom level. */
 function getBlockPreviewHeight(block: RenderedPage['blocks'][number], zoom: number) {
   return block.lines.length * block.lineHeight * zoom
+}
+
+function columnLabel(pageType: PageType, column: 0 | 1) {
+  if (pageType === 'program') {
+    return 'single column'
+  }
+  return column === 0 ? 'left column' : 'right column'
 }
 
 function HorizontalRuler({ zoom, panX, maxVal }: { zoom: number; panX: number; maxVal: number }) {
@@ -338,6 +360,9 @@ export function CanvasPreview({
   canUndoSectionFlow = false,
   canRedoSectionFlow = false,
   borderSettings,
+  isFocusMode = false,
+  onEnterFocusMode,
+  onExitFocusMode,
 }: {
   renderedPages: RenderedPage[]
   previewPageIndex: number
@@ -352,6 +377,9 @@ export function CanvasPreview({
   canUndoSectionFlow?: boolean
   canRedoSectionFlow?: boolean
   borderSettings?: CanvasBorderSettings | null
+  isFocusMode?: boolean
+  onEnterFocusMode?: () => void
+  onExitFocusMode?: () => void
 }) {
   const [zoom, setZoom] = useState(0.85)
   const [pan, setPan] = useState({ x: 100, y: 50 })
@@ -368,6 +396,8 @@ export function CanvasPreview({
     flow: number
     contentTop: number
     maxContentY: number
+    pageType: PageType
+    startPlacement: { localPageIndex: number; column: 0 | 1; y: number }
   } | null>(null)
 
   // Build display slots: optional front cover, content pages, optional back cover
@@ -380,9 +410,12 @@ export function CanvasPreview({
   const totalSlots = displaySlots.length
 
   const containerRef = useRef<HTMLDivElement>(null)
+  const pageSurfaceRef = useRef<HTMLDivElement>(null)
   const lastPointerRef = useRef<{ x: number; y: number } | null>(null)
   const sectionCaptureRef = useRef<HTMLElement | null>(null)
   const figmaCopyResetTimeoutRef = useRef<ReturnType<typeof window.setTimeout> | null>(null)
+  const viewBeforeFocusRef = useRef<{ zoom: number; pan: { x: number; y: number } } | null>(null)
+  const normalViewRef = useRef<{ zoom: number; pan: { x: number; y: number } }>({ zoom: 0.85, pan: { x: 100, y: 50 } })
 
   const safeIdx = Math.min(previewPageIndex, Math.max(0, totalSlots - 1))
   const currentSlot = displaySlots[safeIdx]
@@ -427,6 +460,25 @@ export function CanvasPreview({
     setZoom(0.85)
     setPan({ x: 100, y: 50 })
   }
+  const fitCurrentPageToViewport = useCallback(() => {
+    const viewport = containerRef.current
+    if (!viewport) {
+      return
+    }
+
+    const availableWidth = Math.max(1, viewport.clientWidth - RULER_SIZE)
+    const availableHeight = Math.max(1, viewport.clientHeight - RULER_SIZE)
+    const nextZoom = Math.min(3, Math.max(0.2, Math.floor(Math.min(
+      (availableWidth - 48) / PAGE_WIDTH,
+      (availableHeight - 48) / PAGE_HEIGHT,
+    ) * 100) / 100))
+
+    setZoom(nextZoom)
+    setPan({
+      x: Math.max(16, (availableWidth - PAGE_WIDTH * nextZoom) / 2),
+      y: Math.max(16, (availableHeight - PAGE_HEIGHT * nextZoom) / 2),
+    })
+  }, [])
   const setFigmaCopyFeedback = (state: 'copied' | 'error') => {
     if (figmaCopyResetTimeoutRef.current !== null) {
       window.clearTimeout(figmaCopyResetTimeoutRef.current)
@@ -480,6 +532,45 @@ export function CanvasPreview({
       }
     }
   }, [])
+
+  useEffect(() => {
+    if (!isFocusMode) {
+      normalViewRef.current = { zoom, pan }
+    }
+  }, [isFocusMode, pan, zoom])
+
+  useEffect(() => {
+    if (!isFocusMode) {
+      const previous = viewBeforeFocusRef.current
+      if (previous) {
+        setZoom(previous.zoom)
+        setPan(previous.pan)
+        viewBeforeFocusRef.current = null
+      }
+      return
+    }
+
+    if (!viewBeforeFocusRef.current) {
+      viewBeforeFocusRef.current = normalViewRef.current
+    }
+
+    const frame = window.requestAnimationFrame(fitCurrentPageToViewport)
+    return () => window.cancelAnimationFrame(frame)
+  }, [fitCurrentPageToViewport, isFocusMode])
+
+  useEffect(() => {
+    if (!isFocusMode || !onExitFocusMode) {
+      return
+    }
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        onExitFocusMode()
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [isFocusMode, onExitFocusMode])
 
   // Non-passive wheel listener for zoom / scroll
   useEffect(() => {
@@ -583,6 +674,12 @@ export function CanvasPreview({
     e.stopPropagation()
     sectionCaptureRef.current = e.currentTarget
     e.currentTarget.setPointerCapture(e.pointerId)
+    const startPlacement = placementFromFlow(
+      flowPosition,
+      currentSlot.page.contentTop,
+      currentSlot.page.maxContentY,
+      currentSlot.page.sourcePageType,
+    )
     setItemDrag({
       pageId: currentSlot.page.sourcePageId,
       itemId,
@@ -592,6 +689,8 @@ export function CanvasPreview({
       flow: flowPosition,
       contentTop: currentSlot.page.contentTop,
       maxContentY: currentSlot.page.maxContentY,
+      pageType: currentSlot.page.sourcePageType,
+      startPlacement,
     })
   }
 
@@ -603,7 +702,22 @@ export function CanvasPreview({
       e.preventDefault()
       e.stopPropagation()
       const deltaY = (e.clientY - prev.startClientY) / zoom
-      const snapped = snapFlowPosition(prev.startFlow + deltaY, FLOW_POSITION_SNAP_INCREMENT)
+      const yFlow = Math.max(0, prev.startFlow + deltaY)
+      const yPlacement = placementFromFlow(yFlow, prev.contentTop, prev.maxContentY, prev.pageType)
+      const pageRect = pageSurfaceRef.current?.getBoundingClientRect()
+      const pointerDocX = pageRect ? (e.clientX - pageRect.left) / zoom : PAGE_CENTER_X
+      const column = prev.pageType === 'program' ? 0 : pointerDocX >= PAGE_CENTER_X ? 1 : 0
+      const snapped = snapFlowPosition(
+        flowFromPlacement(
+          yPlacement.localPageIndex,
+          column,
+          yPlacement.y,
+          prev.contentTop,
+          prev.maxContentY,
+          prev.pageType,
+        ),
+        FLOW_POSITION_SNAP_INCREMENT,
+      )
       return { ...prev, flow: Math.max(0, snapped) }
     })
   }
@@ -640,12 +754,26 @@ export function CanvasPreview({
           currentSlot.page.sourcePageType,
         )
       : null
+  const activeGuidePageLabel =
+    activeGuide && itemDrag
+      ? activeGuide.localPageIndex === itemDrag.startPlacement.localPageIndex
+        ? 'this page'
+        : activeGuide.localPageIndex > itemDrag.startPlacement.localPageIndex
+          ? `overflow page +${activeGuide.localPageIndex - itemDrag.startPlacement.localPageIndex}`
+          : `overflow page ${activeGuide.localPageIndex - itemDrag.startPlacement.localPageIndex}`
+      : null
 
   const cursorClass = isDragging ? 'cursor-grabbing' : isSpaceDown ? 'cursor-grab' : 'cursor-default'
 
   return (
-    <div className="flex h-full min-h-0 flex-col rounded-xl border border-[var(--color-hairline)] bg-white">
+    <div
+      className={cn(
+        'flex h-full min-h-0 flex-col bg-white',
+        isFocusMode ? 'rounded-none border-0' : 'rounded-xl border border-[var(--color-hairline)]',
+      )}
+    >
       {/* Header */}
+      {!isFocusMode ? (
       <div className="z-10 flex items-center justify-between gap-2 rounded-t-xl border-b border-[var(--color-hairline-soft)] bg-white px-4 py-2.5">
         <div className="min-w-0 flex-1">
           <h2 className="text-sm font-semibold text-[var(--color-ink)]">Canvas Preview</h2>
@@ -769,10 +897,25 @@ export function CanvasPreview({
               <CircleHelp className="size-3.5 shrink-0" />
             </Button>
           ) : null}
+          {onEnterFocusMode ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="size-7 text-[var(--color-body)]"
+              disabled={!currentSlot}
+              onClick={onEnterFocusMode}
+              title="Focus canvas"
+              aria-label="Focus canvas"
+            >
+              <Maximize2 className="size-3.5 shrink-0" />
+            </Button>
+          ) : null}
         </div>
       </div>
+      ) : null}
 
-      {showHints ? (
+      {showHints && !isFocusMode ? (
         <div className="flex flex-wrap items-start gap-2 border-b border-[var(--color-hairline-soft)] bg-[var(--surface-canvas)] px-4 py-2 text-[11px] text-[var(--color-muted)]">
           <ul className="m-0 flex min-w-0 flex-1 list-disc flex-wrap items-center gap-x-6 gap-y-1 pl-4">
             <li>Hold <kbd className="rounded border border-[var(--color-hairline)] bg-white px-1">Space</kbd> + drag to pan</li>
@@ -806,6 +949,21 @@ export function CanvasPreview({
           if (isSpaceDown || isDragging) e.preventDefault()
         }}
       >
+        {isFocusMode && onExitFocusMode ? (
+          <Button
+            type="button"
+            size="sm"
+            className="absolute right-4 top-4 z-30 h-9 bg-white px-3 text-xs text-[var(--color-ink)] shadow-md hover:bg-[var(--surface-canvas)]"
+            variant="ghost"
+            onClick={onExitFocusMode}
+            title="Exit focus mode (Esc)"
+            aria-label="Exit focus mode"
+          >
+            <Minimize2 className="size-3.5" />
+            Back
+          </Button>
+        ) : null}
+
         {/* Top-left corner box */}
         <div
           className="absolute left-0 top-0 z-20 border-r border-b border-[#cfcdc4] bg-[#efeee8]"
@@ -850,6 +1008,7 @@ export function CanvasPreview({
             </div>
           ) : currentSlot?.kind === 'page' ? (
             <div
+              ref={pageSurfaceRef}
               className="absolute animate-fade-in overflow-hidden border border-[var(--color-hairline)] bg-white shadow-[0_1px_2px_rgba(38,37,30,0.06),0_8px_24px_rgba(38,37,30,0.08)] transition-opacity"
               style={{ width: PAGE_WIDTH * zoom, height: PAGE_HEIGHT * zoom }}
               onPointerDown={handleCanvasBackgroundPointerDown}
@@ -902,7 +1061,15 @@ export function CanvasPreview({
                   )
                   .map((overlay) => {
                     const isDraggingItem = itemDrag?.itemId === overlay.itemId
-                    const translateY = isDraggingItem ? (itemDrag.flow - itemDrag.startFlow) * zoom : 0
+                    const dragPlacement = isDraggingItem
+                      ? placementFromFlow(itemDrag.flow, itemDrag.contentTop, itemDrag.maxContentY, itemDrag.pageType)
+                      : null
+                    const translateY =
+                      isDraggingItem && dragPlacement ? (dragPlacement.y - itemDrag.startPlacement.y) * zoom : 0
+                    const translateX =
+                      isDraggingItem && dragPlacement
+                        ? (dragPlacement.column - itemDrag.startPlacement.column) * PAGE_CENTER_X * zoom
+                        : 0
                     return (
                       <button
                         key={`drag-${overlay.id}`}
@@ -916,9 +1083,9 @@ export function CanvasPreview({
                           top: overlay.top * zoom,
                           width: overlay.width * zoom,
                           height: overlay.height * zoom,
-                          transform: `translateY(${translateY}px)`,
+                          transform: `translate(${translateX}px, ${translateY}px)`,
                         }}
-                        title="Drag to reposition"
+                        title="Drag vertically to reorder, or sideways to move columns"
                         onPointerDown={(e) =>
                           handleLayoutItemPointerDown(e, overlay.itemId, overlay.flowPosition)
                         }
@@ -933,16 +1100,36 @@ export function CanvasPreview({
                 activeGuide.localPageIndex === currentSlot.page.sourcePageLocalIndex && (
                   <>
                     <div
+                      className="pointer-events-none absolute bottom-0 top-0 z-10 bg-[color:color-mix(in_srgb,var(--color-primary)_6%,transparent)]"
+                      style={{
+                        left: (currentSlot.page.sourcePageType === 'program' ? 0 : activeGuide.column * PAGE_CENTER_X) * zoom,
+                        width: (currentSlot.page.sourcePageType === 'program' ? PAGE_WIDTH : PAGE_CENTER_X) * zoom,
+                      }}
+                    />
+                    <div
                       className="pointer-events-none absolute left-0 right-0 z-20 border-t border-dashed border-[var(--color-primary)]"
                       style={{ top: activeGuide.y * zoom }}
                     />
                     <div
                       className="pointer-events-none absolute z-20 rounded bg-[var(--color-primary)] px-1.5 py-0.5 text-[10px] font-semibold text-white"
-                      style={{ left: 4, top: activeGuide.y * zoom + 2 }}
+                      style={{
+                        left:
+                          (currentSlot.page.sourcePageType === 'program' ? 4 : activeGuide.column * PAGE_CENTER_X + 4) *
+                          zoom,
+                        top: activeGuide.y * zoom + 2,
+                      }}
                     >
-                      Y {Math.round(activeGuide.y)}
+                      {columnLabel(currentSlot.page.sourcePageType, activeGuide.column)} · Y {Math.round(activeGuide.y)}
                     </div>
                   </>
+                )}
+              {pageSupportsLayoutItems &&
+                activeGuide &&
+                activeGuide.localPageIndex !== currentSlot.page.sourcePageLocalIndex &&
+                activeGuidePageLabel && (
+                  <div className="pointer-events-none absolute inset-x-3 bottom-3 z-20 rounded border border-[var(--color-primary)] bg-white/95 px-2 py-1.5 text-[11px] font-medium text-[var(--color-ink)] shadow-sm">
+                    Drop target is on {activeGuidePageLabel}; release to let text autoflow there.
+                  </div>
                 )}
               {borderSettings && (
                 <BorderOverlay
@@ -962,6 +1149,7 @@ export function CanvasPreview({
       </div>
 
       {/* Footer Navigation */}
+      {!isFocusMode ? (
       <div className="z-10 flex items-center justify-between gap-3 rounded-b-xl border-t border-[var(--color-hairline)] bg-[var(--surface-canvas)] px-4 py-2.5">
         <div className="text-xs font-medium text-[var(--color-muted)]">
           {currentSlot?.kind === 'cover'
@@ -1008,6 +1196,7 @@ export function CanvasPreview({
           </Button>
         </div>
       </div>
+      ) : null}
     </div>
   )
 }
