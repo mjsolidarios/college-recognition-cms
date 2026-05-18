@@ -24,6 +24,8 @@ const TITLE_GAP_PROGRAM = 6
 const SECTION_GAP = 11
 const PARAGRAPH_GAP = 6
 const ITEM_GAP = 2
+const ACADEMIC_MEDAL_GAP = 8
+const ACADEMIC_PROGRAM_GAP = 6
 /** Pixels inset for faculty name lists under “Permanent Faculty:” / “Part-time Lecturers:”. */
 const CORE_LIST_INDENT = 14
 /** Shrink wrap width slightly so layout reserves at least as many lines as the canvas / PDF renderer. */
@@ -588,6 +590,14 @@ function addLinesToFlow(context: LayoutContext, options: TextOptions) {
   }
 }
 
+function addFlowGap(context: LayoutContext, gap: number) {
+  const scaledGap = gap * getScale(context.settings)
+  if (context.currentY[context.currentColumn] + scaledGap > context.maxContentY) {
+    advanceFlow(context)
+  }
+  context.currentY[context.currentColumn] += scaledGap
+}
+
 function getColumnsPerPage(context: LayoutContext): number {
   return context.logicalPage.type === 'program' ? 1 : 2
 }
@@ -749,24 +759,37 @@ function groupAcademicEntries(entries: AcademicEntry[]) {
   return grouped
 }
 
-function renderAcademicEntry(context: LayoutContext, entry: AcademicEntry, key: string) {
+function renderAcademicAwardHeading(context: LayoutContext, award: string, key: string, reserveName: string) {
+  addFlowGap(context, ACADEMIC_PROGRAM_GAP)
+  addLinesToFlow(context, {
+    idPrefix: `academic-award-${key}`,
+    text: award,
+    fontSize: context.settings.bodySize,
+    fontWeight: 'bold',
+    spacingAfter: ITEM_GAP,
+    allowSplit: false,
+    reserveHeight: estimateTextHeight(
+      context,
+      {
+        idPrefix: `academic-award-${key}-reserve`,
+        text: reserveName,
+        fontSize: context.settings.bodySize,
+      },
+      1,
+      true,
+    ),
+  })
+}
+
+function renderAcademicName(context: LayoutContext, entry: AcademicEntry, key: string) {
   const sectionId = entry.id
   addLinesToFlow(context, {
     idPrefix: `academic-name-${key}`,
     text: entry.name,
     fontSize: context.settings.bodySize,
-    fontWeight: 'bold',
     spacingAfter: ITEM_GAP,
     allowSplit: false,
     reserveHeight: context.settings.bodySize * getScale(context.settings) * context.settings.lineHeight,
-    sectionId,
-  })
-  addLinesToFlow(context, {
-    idPrefix: `academic-award-${key}`,
-    text: entry.award,
-    fontSize: context.settings.bodySize,
-    spacingAfter: 10,
-    minFragmentLines: 2,
     sectionId,
   })
 }
@@ -777,11 +800,13 @@ function renderAcademicPage(context: LayoutContext, entries: AcademicEntry[]) {
   let categoryIndex = 0
   let lastGrade: string | null = null
   let lastCategory: string | null = null
+  let lastAward: string | null = null
 
   for (const { item: entry, index } of sorted) {
     if (entry.gradeLevel !== lastGrade) {
       lastGrade = entry.gradeLevel
       lastCategory = null
+      lastAward = null
       const categories = groupAcademicEntries(entries).get(entry.gradeLevel)
       addLinesToFlow(context, {
         idPrefix: `academic-grade-${gradeIndex}`,
@@ -810,6 +835,8 @@ function renderAcademicPage(context: LayoutContext, entries: AcademicEntry[]) {
 
     if (entry.category !== lastCategory) {
       lastCategory = entry.category
+      lastAward = null
+      addFlowGap(context, ACADEMIC_MEDAL_GAP)
       addLinesToFlow(context, {
         idPrefix: `academic-category-${gradeIndex}-${categoryIndex}`,
         text: entry.category,
@@ -836,7 +863,11 @@ function renderAcademicPage(context: LayoutContext, entries: AcademicEntry[]) {
     if (isValidFlowPosition(entry.flowPosition)) {
       setContextToFlowPosition(context, entry.flowPosition)
     }
-    renderAcademicEntry(context, entry, `${entry.id}-${index}`)
+    if (entry.award !== lastAward) {
+      lastAward = entry.award
+      renderAcademicAwardHeading(context, entry.award, `${entry.id}-${index}`, entry.name)
+    }
+    renderAcademicName(context, entry, `${entry.id}-${index}`)
   }
 }
 
@@ -1159,7 +1190,7 @@ function measureAcademicEntryFlowSpan(page: AcademicPage, settings: CmsSettings,
   const context = createLayoutContext(page, settings, 1)
   setContextToFlowPosition(context, 0)
   const start = flowAtLayoutContext(context, context.currentColumn)
-  renderAcademicEntry(context, entry, `measure-${entry.id}`)
+  renderAcademicName(context, entry, `measure-${entry.id}`)
   const end = flowAtLayoutContext(context, context.currentColumn)
   return Math.max(FLOW_PACK_GAP, end - start)
 }
@@ -1171,11 +1202,13 @@ function computeImplicitAcademicEntryFlows(page: AcademicPage, settings: CmsSett
   let categoryIndex = 0
   let lastGrade: string | null = null
   let lastCategory: string | null = null
+  let lastAward: string | null = null
 
   for (const [index, entry] of page.content.entries.entries()) {
     if (entry.gradeLevel !== lastGrade) {
       lastGrade = entry.gradeLevel
       lastCategory = null
+      lastAward = null
       addLinesToFlow(context, {
         idPrefix: `academic-grade-implicit-${gradeIndex}`,
         text: entry.gradeLevel,
@@ -1190,6 +1223,8 @@ function computeImplicitAcademicEntryFlows(page: AcademicPage, settings: CmsSett
     }
     if (entry.category !== lastCategory) {
       lastCategory = entry.category
+      lastAward = null
+      addFlowGap(context, ACADEMIC_MEDAL_GAP)
       addLinesToFlow(context, {
         idPrefix: `academic-category-implicit-${gradeIndex}-${categoryIndex}`,
         text: entry.category,
@@ -1201,8 +1236,12 @@ function computeImplicitAcademicEntryFlows(page: AcademicPage, settings: CmsSett
       })
       categoryIndex += 1
     }
+    if (entry.award !== lastAward) {
+      lastAward = entry.award
+      renderAcademicAwardHeading(context, entry.award, `implicit-award-${index}`, entry.name)
+    }
     flows.set(entry.id, flowAtLayoutContext(context, context.currentColumn))
-    renderAcademicEntry(context, entry, `implicit-${index}`)
+    renderAcademicName(context, entry, `implicit-${index}`)
   }
   return flows
 }

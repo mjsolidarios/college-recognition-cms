@@ -33,6 +33,7 @@ const RULER_FONT = `7.5px 'JetBrains Mono', 'Fira Code', monospace`
 const CANVAS_HINTS_HIDDEN_KEY = 'cms_canvas_hints_hidden'
 const FIGMA_COPY_FEEDBACK_DURATION_MS = 2200
 const PAGE_CENTER_X = PAGE_WIDTH / 2
+const FULL_WIDTH_BLOCK_THRESHOLD = PAGE_WIDTH * 0.72
 
 function readHintsHiddenPreference(): boolean {
   if (typeof window === 'undefined') {
@@ -61,6 +62,31 @@ function releasePointerCaptureIfHeld(target: EventTarget | null, pointerId: numb
 /** DOM height required to show all precomputed lines for a text block at the current zoom level. */
 function getBlockPreviewHeight(block: RenderedPage['blocks'][number], zoom: number) {
   return block.lines.length * block.lineHeight * zoom
+}
+
+function getBlockColumn(block: RenderedPage['blocks'][number], pageType: PageType) {
+  if (pageType === 'program' || block.width >= FULL_WIDTH_BLOCK_THRESHOLD) {
+    return 0
+  }
+  return block.x + block.width / 2 < PAGE_CENTER_X ? 1 : 2
+}
+
+function getPageTextInColumnOrder(page: RenderedPage) {
+  return [...page.blocks]
+    .sort((left, right) => {
+      const leftColumn = getBlockColumn(left, page.sourcePageType)
+      const rightColumn = getBlockColumn(right, page.sourcePageType)
+      if (leftColumn !== rightColumn) {
+        return leftColumn - rightColumn
+      }
+      if (Math.abs(left.y - right.y) > 0.5) {
+        return left.y - right.y
+      }
+      return left.x - right.x
+    })
+    .map((block) => getRenderedBlockLines(block).join('\n').trim())
+    .filter(Boolean)
+    .join('\n\n')
 }
 
 function columnLabel(pageType: PageType, column: 0 | 1) {
@@ -387,6 +413,7 @@ export function CanvasPreview({
   const [showHints, setShowHints] = useState(() => !readHintsHiddenPreference())
   const [isDragging, setIsDragging] = useState(false)
   const [figmaCopyState, setFigmaCopyState] = useState<'idle' | 'copied' | 'error'>('idle')
+  const [textCopyState, setTextCopyState] = useState<'idle' | 'copied' | 'error'>('idle')
   const [itemDrag, setItemDrag] = useState<{
     pageId: string
     itemId: string
@@ -400,12 +427,15 @@ export function CanvasPreview({
     startPlacement: { localPageIndex: number; column: 0 | 1; y: number }
   } | null>(null)
 
-  // Build display slots: optional front cover, content pages, optional back cover
-  type DisplaySlot = { kind: 'cover'; dataUrl: string; label: string } | { kind: 'page'; page: RenderedPage }
-  const displaySlots: DisplaySlot[] = []
-  if (frontCover) displaySlots.push({ kind: 'cover', dataUrl: frontCover, label: 'Front Cover' })
+  // Build display slots: always show cover placeholders around content pages.
+  type DisplaySlot =
+    | { kind: 'cover'; dataUrl: string | null; label: string; placeholderLabel: string }
+    | { kind: 'page'; page: RenderedPage }
+  const displaySlots: DisplaySlot[] = [
+    { kind: 'cover', dataUrl: frontCover ?? null, label: 'Front Cover', placeholderLabel: 'Cover Page' },
+  ]
   for (const page of renderedPages) displaySlots.push({ kind: 'page', page })
-  if (backCover) displaySlots.push({ kind: 'cover', dataUrl: backCover, label: 'Back Cover' })
+  displaySlots.push({ kind: 'cover', dataUrl: backCover ?? null, label: 'Back Cover', placeholderLabel: 'Back Page' })
 
   const totalSlots = displaySlots.length
 
@@ -414,6 +444,7 @@ export function CanvasPreview({
   const lastPointerRef = useRef<{ x: number; y: number } | null>(null)
   const sectionCaptureRef = useRef<HTMLElement | null>(null)
   const figmaCopyResetTimeoutRef = useRef<ReturnType<typeof window.setTimeout> | null>(null)
+  const textCopyResetTimeoutRef = useRef<ReturnType<typeof window.setTimeout> | null>(null)
   const viewBeforeFocusRef = useRef<{ zoom: number; pan: { x: number; y: number } } | null>(null)
   const normalViewRef = useRef<{ zoom: number; pan: { x: number; y: number } }>({ zoom: 0.85, pan: { x: 100, y: 50 } })
 
@@ -493,11 +524,36 @@ export function CanvasPreview({
     if (!currentSlot) {
       return
     }
+    if (currentSlot.kind === 'cover' && !currentSlot.dataUrl) {
+      setFigmaCopyFeedback('error')
+      return
+    }
     try {
-      await copySlotAsFigmaLayout(currentSlot, currentExportBorderSettings, renderedPages)
+      await copySlotAsFigmaLayout(currentSlot as { kind: 'cover'; dataUrl: string; label: string } | { kind: 'page'; page: RenderedPage }, currentExportBorderSettings, renderedPages)
       setFigmaCopyFeedback('copied')
     } catch {
       setFigmaCopyFeedback('error')
+    }
+  }
+  const setTextCopyFeedback = (state: 'copied' | 'error') => {
+    if (textCopyResetTimeoutRef.current !== null) {
+      window.clearTimeout(textCopyResetTimeoutRef.current)
+    }
+    setTextCopyState(state)
+    textCopyResetTimeoutRef.current = window.setTimeout(() => {
+      setTextCopyState('idle')
+      textCopyResetTimeoutRef.current = null
+    }, FIGMA_COPY_FEEDBACK_DURATION_MS)
+  }
+  const handleCopyPageText = async () => {
+    if (!currentSlot || currentSlot.kind !== 'page') {
+      return
+    }
+    try {
+      await navigator.clipboard.writeText(getPageTextInColumnOrder(currentSlot.page))
+      setTextCopyFeedback('copied')
+    } catch {
+      setTextCopyFeedback('error')
     }
   }
 
@@ -529,6 +585,9 @@ export function CanvasPreview({
     return () => {
       if (figmaCopyResetTimeoutRef.current !== null) {
         window.clearTimeout(figmaCopyResetTimeoutRef.current)
+      }
+      if (textCopyResetTimeoutRef.current !== null) {
+        window.clearTimeout(textCopyResetTimeoutRef.current)
       }
     }
   }, [])
@@ -779,10 +838,10 @@ export function CanvasPreview({
           <h2 className="text-sm font-semibold text-[var(--color-ink)]">Canvas Preview</h2>
           <p className="truncate text-xs text-[var(--color-muted)]">
             {(() => {
-              const coverCount = (frontCover ? 1 : 0) + (backCover ? 1 : 0)
               const pageLabel = `${renderedPages.length} rendered page${renderedPages.length !== 1 ? 's' : ''}`
-              const coverLabel = coverCount > 0 ? ` + ${coverCount} cover${coverCount > 1 ? 's' : ''}` : ''
-              return `${PAGE_WIDTH} × ${PAGE_HEIGHT} · ${pageLabel}${coverLabel}`
+              const uploadedCoverCount = (frontCover ? 1 : 0) + (backCover ? 1 : 0)
+              const coverLabel = `${uploadedCoverCount} of 2 cover images uploaded`
+              return `${PAGE_WIDTH} × ${PAGE_HEIGHT} · 2 cover placeholders · ${pageLabel} · ${coverLabel}`
             })()}
           </p>
         </div>
@@ -820,13 +879,28 @@ export function CanvasPreview({
             variant="ghost"
             size="icon"
             className="size-7 text-[var(--color-body)]"
-            disabled={!currentSlot}
+            disabled={!currentSlot || (currentSlot.kind === 'cover' && !currentSlot.dataUrl)}
             onClick={() => void handleCopyAsFigmaLayout()}
             title={figmaCopyState === 'copied' ? 'Copied!' : figmaCopyState === 'error' ? 'Copy failed' : 'Copy Figma Layout'}
             aria-label={figmaCopyState === 'copied' ? 'Copied!' : figmaCopyState === 'error' ? 'Copy failed' : 'Copy Figma Layout'}
             aria-live="polite"
           >
             {figmaCopyState === 'copied'
+              ? <Check aria-hidden className="size-3.5 shrink-0 text-emerald-600" />
+              : <ClipboardCopy aria-hidden className="size-3.5 shrink-0" />}
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="size-7 text-[var(--color-body)]"
+            disabled={currentSlot?.kind !== 'page'}
+            onClick={() => void handleCopyPageText()}
+            title={textCopyState === 'copied' ? 'Copied!' : textCopyState === 'error' ? 'Copy failed' : 'Copy page text'}
+            aria-label={textCopyState === 'copied' ? 'Copied!' : textCopyState === 'error' ? 'Copy failed' : 'Copy page text'}
+            aria-live="polite"
+          >
+            {textCopyState === 'copied'
               ? <Check aria-hidden className="size-3.5 shrink-0 text-emerald-600" />
               : <ClipboardCopy aria-hidden className="size-3.5 shrink-0" />}
           </Button>
@@ -997,14 +1071,39 @@ export function CanvasPreview({
         >
           {currentSlot?.kind === 'cover' ? (
             <div
-              className="absolute animate-fade-in border border-[var(--color-hairline)] bg-white transition-opacity overflow-hidden"
+              className="absolute flex animate-fade-in items-center justify-center overflow-hidden border border-[var(--color-hairline)] bg-white transition-opacity"
               style={{ width: PAGE_WIDTH * zoom, height: PAGE_HEIGHT * zoom }}
             >
-              <img
-                src={currentSlot.dataUrl}
-                alt={currentSlot.label}
-                className="pointer-events-none h-full w-full object-contain"
-              />
+              {currentSlot.dataUrl ? (
+                <img
+                  src={currentSlot.dataUrl}
+                  alt={currentSlot.label}
+                  className="pointer-events-none h-full w-full object-contain"
+                />
+              ) : (
+                <div
+                  className="pointer-events-none flex items-center justify-center border border-dashed border-[var(--color-hairline)] bg-[var(--surface-canvas)] text-center"
+                  style={{
+                    width: (PAGE_WIDTH - 80) * zoom,
+                    height: (PAGE_HEIGHT - 80) * zoom,
+                  }}
+                >
+                  <div>
+                    <div
+                      className="font-semibold uppercase text-[var(--color-muted)]"
+                      style={{ fontSize: 13 * zoom, letterSpacing: `${1.2 * zoom}px` }}
+                    >
+                      {currentSlot.placeholderLabel}
+                    </div>
+                    <div
+                      className="mt-1 text-[var(--color-muted)]"
+                      style={{ fontSize: 10 * zoom }}
+                    >
+                      No image uploaded
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           ) : currentSlot?.kind === 'page' ? (
             <div
