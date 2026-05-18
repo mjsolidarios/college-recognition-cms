@@ -1,4 +1,4 @@
-import { Check, ChevronLeft, ChevronRight, CircleHelp, ClipboardCopy, Minus, Plus, Redo2, RotateCcw, Undo2 } from 'lucide-react'
+import { Check, ChevronLeft, ChevronRight, CircleHelp, ClipboardCopy, Maximize2, Minimize2, Minus, Plus, Redo2, RotateCcw, Undo2 } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 
 import { Button } from '@/components/ui/button'
@@ -359,6 +359,7 @@ export function CanvasPreview({
   const [showHints, setShowHints] = useState(() => !readHintsHiddenPreference())
   const [isDragging, setIsDragging] = useState(false)
   const [figmaCopyState, setFigmaCopyState] = useState<'idle' | 'copied' | 'error'>('idle')
+  const [isFocusMode, setIsFocusMode] = useState(false)
   const [itemDrag, setItemDrag] = useState<{
     pageId: string
     itemId: string
@@ -456,6 +457,9 @@ export function CanvasPreview({
       if (e.code === 'Space' && !e.repeat) {
         e.preventDefault()
         setIsSpaceDown(true)
+      }
+      if (e.code === 'Escape') {
+        setIsFocusMode(false)
       }
     }
     const onKeyUp = (e: KeyboardEvent) => {
@@ -644,9 +648,17 @@ export function CanvasPreview({
   const cursorClass = isDragging ? 'cursor-grabbing' : isSpaceDown ? 'cursor-grab' : 'cursor-default'
 
   return (
-    <div className="flex h-full min-h-0 flex-col rounded-xl border border-[var(--color-hairline)] bg-white">
+    <div className={cn(
+      'flex flex-col bg-white',
+      isFocusMode
+        ? 'fixed inset-0 z-50'
+        : 'h-full min-h-0 rounded-xl border border-[var(--color-hairline)]',
+    )}>
       {/* Header */}
-      <div className="z-10 flex items-center justify-between gap-2 rounded-t-xl border-b border-[var(--color-hairline-soft)] bg-white px-4 py-2.5">
+      <div className={cn(
+        'z-10 flex items-center justify-between gap-2 border-b border-[var(--color-hairline-soft)] bg-white px-4 py-2.5',
+        isFocusMode ? '' : 'rounded-t-xl',
+      )}>
         <div className="min-w-0 flex-1">
           <h2 className="text-sm font-semibold text-[var(--color-ink)]">Canvas Preview</h2>
           <p className="truncate text-xs text-[var(--color-muted)]">
@@ -769,6 +781,21 @@ export function CanvasPreview({
               <CircleHelp className="size-3.5 shrink-0" />
             </Button>
           ) : null}
+          <div className="ml-0.5 border-l border-[var(--color-hairline-soft)] pl-1.5">
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="size-7 text-[var(--color-body)]"
+              onClick={() => setIsFocusMode((prev) => !prev)}
+              title={isFocusMode ? 'Exit focus mode' : 'Enter focus mode'}
+              aria-label={isFocusMode ? 'Exit focus mode' : 'Enter focus mode'}
+            >
+              {isFocusMode
+                ? <Minimize2 className="size-3.5 shrink-0" />
+                : <Maximize2 className="size-3.5 shrink-0" />}
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -962,7 +989,10 @@ export function CanvasPreview({
       </div>
 
       {/* Footer Navigation */}
-      <div className="z-10 flex items-center justify-between gap-3 rounded-b-xl border-t border-[var(--color-hairline)] bg-[var(--surface-canvas)] px-4 py-2.5">
+      <div className={cn(
+        'z-10 flex items-center justify-between gap-3 border-t border-[var(--color-hairline)] bg-[var(--surface-canvas)] px-4 py-2.5',
+        isFocusMode ? '' : 'rounded-b-xl',
+      )}>
         <div className="text-xs font-medium text-[var(--color-muted)]">
           {currentSlot?.kind === 'cover'
             ? `${currentSlot.label} (${safeIdx + 1} of ${totalSlots})`
