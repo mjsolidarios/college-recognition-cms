@@ -24,8 +24,11 @@ const TITLE_GAP_PROGRAM = 6
 const SECTION_GAP = 11
 const PARAGRAPH_GAP = 6
 const ITEM_GAP = 2
-const ACADEMIC_MEDAL_GAP = 8
+const ACADEMIC_YEAR_GAP = 16
+const ACADEMIC_MEDAL_GAP = 12
 const ACADEMIC_PROGRAM_GAP = 6
+const ACADEMIC_NAME_INDENT = 12
+const HIDDEN_NONACADEMIC_CATEGORIES = new Set(['Individual Honors'])
 /** Pixels inset for faculty name lists under “Permanent Faculty:” / “Part-time Lecturers:”. */
 const CORE_LIST_INDENT = 14
 /** Shrink wrap width slightly so layout reserves at least as many lines as the canvas / PDF renderer. */
@@ -789,6 +792,7 @@ function renderAcademicName(context: LayoutContext, entry: AcademicEntry, key: s
     fontSize: context.settings.bodySize,
     spacingAfter: ITEM_GAP,
     allowSplit: false,
+    indent: ACADEMIC_NAME_INDENT,
     reserveHeight: context.settings.bodySize * getScale(context.settings) * context.settings.lineHeight,
     sectionId,
   })
@@ -808,6 +812,7 @@ function renderAcademicPage(context: LayoutContext, entries: AcademicEntry[]) {
       lastCategory = null
       lastAward = null
       const categories = groupAcademicEntries(entries).get(entry.gradeLevel)
+      addFlowGap(context, ACADEMIC_YEAR_GAP)
       addLinesToFlow(context, {
         idPrefix: `academic-grade-${gradeIndex}`,
         text: entry.gradeLevel,
@@ -873,6 +878,41 @@ function renderAcademicPage(context: LayoutContext, entries: AcademicEntry[]) {
 
 function renderNonAcademicEntry(context: LayoutContext, entry: NonAcademicEntry, key: string) {
   const sectionId = entry.id
+  const isBestThesis = /^Best Thesis\b/.test(entry.category)
+  const titleFirst =
+    isBestThesis ||
+    entry.category === 'College Service Awards' ||
+    entry.category.startsWith('Special Citation for Various Achievements') ||
+    entry.category.startsWith('Special Citation for Service') ||
+    entry.category.startsWith('Special Citation for Merit')
+
+  if (titleFirst) {
+    if (isBestThesis || entry.award === 'CICT Student Electoral Committee') {
+      addFlowGap(context, context.settings.bodySize * context.settings.lineHeight)
+    }
+    addLinesToFlow(context, {
+      idPrefix: `nonacademic-award-${key}`,
+      text: entry.award,
+      fontSize: context.settings.bodySize,
+      fontWeight: 'bold',
+      spacingAfter: ITEM_GAP,
+      allowSplit: false,
+      reserveHeight: context.settings.bodySize * getScale(context.settings) * context.settings.lineHeight,
+      sectionId,
+    })
+    if (entry.name) {
+      addLinesToFlow(context, {
+        idPrefix: `nonacademic-name-${key}`,
+        text: entry.name,
+        fontSize: context.settings.bodySize,
+        spacingAfter: 12,
+        minFragmentLines: 2,
+        sectionId,
+      })
+    }
+    return
+  }
+
   addLinesToFlow(context, {
     idPrefix: `nonacademic-name-${key}`,
     text: entry.name,
@@ -901,28 +941,30 @@ function renderNonAcademicPage(context: LayoutContext, entries: NonAcademicEntry
   for (const { item: entry, index } of sorted) {
     if (entry.category !== lastCategory) {
       lastCategory = entry.category
-      addLinesToFlow(context, {
-        idPrefix: `nonacademic-category-${categoryIndex}`,
-        text: entry.category,
-        fontSize: context.settings.headingSize,
-        textRole: 'heading',
-        fontWeight: 'bold',
-        spacingAfter: 10,
-        allowSplit: false,
-        reserveHeight:
-          estimateTextHeight(
-            context,
-            {
-              idPrefix: `nonacademic-name-${categoryIndex}-reserve`,
-              text: entry.name,
-              fontSize: context.settings.bodySize,
-              fontWeight: 'bold',
-            },
-            1,
-            true,
-          ) + context.settings.bodySize * getScale(context.settings) * context.settings.lineHeight,
-      })
-      categoryIndex += 1
+      if (!HIDDEN_NONACADEMIC_CATEGORIES.has(entry.category)) {
+        addLinesToFlow(context, {
+          idPrefix: `nonacademic-category-${categoryIndex}`,
+          text: entry.category,
+          fontSize: context.settings.headingSize,
+          textRole: 'heading',
+          fontWeight: 'bold',
+          spacingAfter: 10,
+          allowSplit: false,
+          reserveHeight:
+            estimateTextHeight(
+              context,
+              {
+                idPrefix: `nonacademic-name-${categoryIndex}-reserve`,
+                text: entry.name,
+                fontSize: context.settings.bodySize,
+                fontWeight: 'bold',
+              },
+              1,
+              true,
+            ) + context.settings.bodySize * getScale(context.settings) * context.settings.lineHeight,
+        })
+        categoryIndex += 1
+      }
     }
 
     if (isValidFlowPosition(entry.flowPosition)) {
@@ -1209,6 +1251,7 @@ function computeImplicitAcademicEntryFlows(page: AcademicPage, settings: CmsSett
       lastGrade = entry.gradeLevel
       lastCategory = null
       lastAward = null
+      addFlowGap(context, ACADEMIC_YEAR_GAP)
       addLinesToFlow(context, {
         idPrefix: `academic-grade-implicit-${gradeIndex}`,
         text: entry.gradeLevel,
@@ -1281,16 +1324,18 @@ function computeImplicitNonAcademicEntryFlows(page: NonAcademicPage, settings: C
   for (const [index, entry] of page.content.entries.entries()) {
     if (entry.category !== lastCategory) {
       lastCategory = entry.category
-      addLinesToFlow(context, {
-        idPrefix: `nonacademic-category-implicit-${categoryIndex}`,
-        text: entry.category,
-        fontSize: settings.headingSize,
-        textRole: 'heading',
-        fontWeight: 'bold',
-        spacingAfter: 10,
-        allowSplit: false,
-      })
-      categoryIndex += 1
+      if (!HIDDEN_NONACADEMIC_CATEGORIES.has(entry.category)) {
+        addLinesToFlow(context, {
+          idPrefix: `nonacademic-category-implicit-${categoryIndex}`,
+          text: entry.category,
+          fontSize: settings.headingSize,
+          textRole: 'heading',
+          fontWeight: 'bold',
+          spacingAfter: 10,
+          allowSplit: false,
+        })
+        categoryIndex += 1
+      }
     }
     flows.set(entry.id, flowAtLayoutContext(context, context.currentColumn))
     renderNonAcademicEntry(context, entry, `implicit-${index}`)

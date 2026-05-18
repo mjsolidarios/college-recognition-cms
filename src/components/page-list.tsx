@@ -3,7 +3,7 @@ import { FileText, GripVertical, LayoutList, Medal, PanelLeftClose, PanelLeftOpe
 
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
-import type { CmsPage, PageType } from '@/types/cms'
+import type { CmsPage, PageType, RenderedPage } from '@/types/cms'
 
 const PAGE_TYPE_CONFIG: Record<PageType, { label: string; color: string; bgColor: string; borderColor: string; icon: typeof FileText }> = {
   core: { label: 'Core', color: 'text-[rgb(var(--type-core))]', bgColor: 'bg-[rgb(var(--type-core)/0.12)]', borderColor: 'border-[rgb(var(--type-core)/0.35)]', icon: FileText },
@@ -25,16 +25,22 @@ function TypeBadge({ type }: { type: PageType }) {
 function SortablePageItem({
   page,
   isActive,
+  activeSubpageIndex,
   index,
   collapsed,
+  subpages,
   onSelect,
+  onSelectSubpage,
   onDelete,
 }: {
   page: CmsPage
   isActive: boolean
+  activeSubpageIndex: number | null
   index: number
   collapsed: boolean
+  subpages: RenderedPage[]
   onSelect: (pageId: string) => void
+  onSelectSubpage?: (pageId: string, sourcePageLocalIndex: number) => void
   onDelete: (pageId: string) => void
 }) {
   const { setNodeRef: setDroppableRef, isOver } = useDroppable({ id: page.id })
@@ -47,6 +53,8 @@ function SortablePageItem({
   const config = PAGE_TYPE_CONFIG[page.type]
   const Icon = config.icon
 
+  const hasSubpages = !collapsed && subpages.length > 1
+
   return (
     <div
       ref={(node) => {
@@ -55,8 +63,8 @@ function SortablePageItem({
       }}
       style={style}
       className={cn(
-        'group flex w-full rounded-xl border transition-all duration-200',
-        collapsed ? 'flex-col items-center gap-2 px-2 py-2.5' : 'items-start gap-2.5 px-3 py-2.5',
+        'group w-full rounded-xl border transition-all duration-200',
+        collapsed ? 'flex flex-col items-center gap-2 px-2 py-2.5' : 'px-3 py-2.5',
         isActive
           ? `${config.borderColor} bg-white shadow-[var(--shadow-panel-active)]`
           : 'border-transparent bg-transparent hover:bg-[var(--surface-canvas)]',
@@ -65,60 +73,95 @@ function SortablePageItem({
       )}
       title={collapsed ? page.title : undefined}
     >
-      <span
-        className={cn(
-          'inline-flex cursor-grab text-[var(--color-muted-soft)] transition-colors hover:text-[var(--color-muted)]',
-          collapsed ? 'mt-0 justify-center' : 'mt-0.5',
-          isActive && 'text-[var(--color-muted)]',
-        )}
-        {...listeners}
-        {...attributes}
-      >
-        <GripVertical className="size-4" />
-      </span>
-      <button
-        type="button"
-        className={cn(
-          'min-w-0 flex-1 text-left',
-          collapsed ? 'flex w-full flex-col items-center gap-1 text-center' : 'space-y-1',
-        )}
-        onClick={() => onSelect(page.id)}
-      >
-        <span className={cn('flex items-center gap-2', collapsed && 'flex-col gap-1')}>
-          <span className={cn('text-xs font-medium tabular-nums text-[var(--color-muted-soft)]', isActive && 'text-[var(--color-muted)]')}>
-            {String(index + 1).padStart(2, '0')}
+      <div className={cn('flex w-full', collapsed ? 'flex-col items-center gap-2' : 'items-start gap-2.5')}>
+        <span
+          className={cn(
+            'inline-flex cursor-grab text-[var(--color-muted-soft)] transition-colors hover:text-[var(--color-muted)]',
+            collapsed ? 'mt-0 justify-center' : 'mt-0.5',
+            isActive && 'text-[var(--color-muted)]',
+          )}
+          {...listeners}
+          {...attributes}
+        >
+          <GripVertical className="size-4" />
+        </span>
+        <button
+          type="button"
+          className={cn(
+            'min-w-0 flex-1 text-left',
+            collapsed ? 'flex w-full flex-col items-center gap-1 text-center' : 'space-y-1',
+          )}
+          onClick={() => onSelect(page.id)}
+        >
+          <span className={cn('flex items-center gap-2', collapsed && 'flex-col gap-1')}>
+            <span className={cn('text-xs font-medium tabular-nums text-[var(--color-muted-soft)]', isActive && 'text-[var(--color-muted)]')}>
+              {String(index + 1).padStart(2, '0')}
+            </span>
+            {collapsed ? (
+              <span className={cn('inline-flex size-10 items-center justify-center rounded-xl border', config.borderColor, config.bgColor, config.color)}>
+                <Icon className="size-4" />
+              </span>
+            ) : (
+              <span className={cn('block truncate text-sm font-semibold', isActive ? 'text-[var(--color-ink)]' : 'text-[var(--color-body)]')}>{page.title}</span>
+            )}
           </span>
           {collapsed ? (
-            <span className={cn('inline-flex size-10 items-center justify-center rounded-xl border', config.borderColor, config.bgColor, config.color)}>
-              <Icon className="size-4" />
+            <span className={cn('block max-w-full truncate text-[11px] font-semibold', isActive ? 'text-[var(--color-ink)]' : 'text-[var(--color-body)]')}>
+              {page.title}
             </span>
           ) : (
-            <span className={cn('block truncate text-sm font-semibold', isActive ? 'text-[var(--color-ink)]' : 'text-[var(--color-body)]')}>{page.title}</span>
+            <span className="flex items-center gap-2">
+              <TypeBadge type={page.type} />
+              {hasSubpages ? (
+                <span className="text-[10px] font-medium uppercase tracking-wider text-[var(--color-muted-soft)]">
+                  {subpages.length} sheets
+                </span>
+              ) : null}
+            </span>
           )}
-        </span>
-        {collapsed ? (
-          <span className={cn('block max-w-full truncate text-[11px] font-semibold', isActive ? 'text-[var(--color-ink)]' : 'text-[var(--color-body)]')}>
-            {page.title}
-          </span>
-        ) : (
-          <TypeBadge type={page.type} />
-        )}
-      </button>
-      {!collapsed ? (
-        <Button
-          type="button"
-          size="icon"
-          variant="ghost"
-          className={cn(
-            'size-7 text-[var(--color-muted)] opacity-0 transition-opacity hover:text-[var(--color-danger)] group-focus-within:opacity-100 sm:group-hover:opacity-100',
-            isActive && 'opacity-100',
-          )}
-          onClick={() => onDelete(page.id)}
-          aria-label={`Delete ${page.title}`}
-          title={`Delete ${page.title}`}
-        >
-          <Trash2 className="size-3.5" />
-        </Button>
+        </button>
+        {!collapsed ? (
+          <Button
+            type="button"
+            size="icon"
+            variant="ghost"
+            className={cn(
+              'size-7 text-[var(--color-muted)] opacity-0 transition-opacity hover:text-[var(--color-danger)] group-focus-within:opacity-100 sm:group-hover:opacity-100',
+              isActive && 'opacity-100',
+            )}
+            onClick={() => onDelete(page.id)}
+            aria-label={`Delete ${page.title}`}
+            title={`Delete ${page.title}`}
+          >
+            <Trash2 className="size-3.5" />
+          </Button>
+        ) : null}
+      </div>
+      {hasSubpages ? (
+        <div className="ml-8 mt-2 border-l border-[var(--color-hairline-soft)] pl-3">
+          {subpages.map((subpage) => {
+            const isSubpageActive = isActive && activeSubpageIndex === subpage.sourcePageLocalIndex
+            return (
+              <button
+                key={subpage.id}
+                type="button"
+                className={cn(
+                  'relative flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs transition-colors',
+                  isSubpageActive
+                    ? 'bg-[var(--surface-canvas)] font-semibold text-[var(--color-ink)]'
+                    : 'text-[var(--color-muted)] hover:bg-[var(--surface-canvas)] hover:text-[var(--color-body)]',
+                )}
+                onClick={() => onSelectSubpage?.(page.id, subpage.sourcePageLocalIndex)}
+              >
+                <span className="absolute -left-3 top-1/2 h-px w-2 bg-[var(--color-hairline-soft)]" />
+                <span className="font-mono text-[10px] tabular-nums text-[var(--color-muted-soft)]">
+                  {index + 1}.{subpage.sourcePageLocalIndex + 1}
+                </span>
+                <span className="truncate">Sheet {subpage.sourcePageLocalIndex + 1}</span>
+              </button>
+            )
+          })}
+        </div>
       ) : null}
     </div>
   )
@@ -126,8 +169,11 @@ function SortablePageItem({
 
 export function PageList({
   pages,
+  renderedPages = [],
   activePageId,
+  activePreviewPageIndex = 0,
   onSelect,
+  onSelectSubpage,
   onAdd,
   onDelete,
   onReorder,
@@ -136,8 +182,11 @@ export function PageList({
   onToggleCollapsed,
 }: {
   pages: CmsPage[]
+  renderedPages?: RenderedPage[]
   activePageId: string
+  activePreviewPageIndex?: number
   onSelect: (pageId: string) => void
+  onSelectSubpage?: (pageId: string, sourcePageLocalIndex: number) => void
   onAdd: (pageType: PageType) => void
   onDelete: (pageId: string) => void
   onReorder: (activeId: string, overId: string) => void
@@ -148,6 +197,13 @@ export function PageList({
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }))
   const activePage = pages.find((page) => page.id === activePageId) ?? pages.at(0) ?? null
   const addButtonGroupClass = collapsed ? 'grid grid-cols-1 gap-1.5' : 'flex gap-2 overflow-x-auto pb-1 sm:grid sm:grid-cols-2 sm:overflow-visible sm:pb-0'
+  const activeRenderedPage = renderedPages[activePreviewPageIndex - 1] ?? null
+  const subpagesByPageId = renderedPages.reduce((groups, renderedPage) => {
+    const current = groups.get(renderedPage.sourcePageId) ?? []
+    current.push(renderedPage)
+    groups.set(renderedPage.sourcePageId, current)
+    return groups
+  }, new Map<string, RenderedPage[]>())
 
   const handleDragEnd = ({ active, over }: DragEndEvent) => {
     if (!over || active.id === over.id) {
@@ -250,7 +306,12 @@ export function PageList({
                 index={index}
                 collapsed={collapsed}
                 isActive={page.id === activePageId}
+                activeSubpageIndex={
+                  activeRenderedPage?.sourcePageId === page.id ? activeRenderedPage.sourcePageLocalIndex : null
+                }
+                subpages={subpagesByPageId.get(page.id) ?? []}
                 onSelect={onSelect}
+                onSelectSubpage={onSelectSubpage}
                 onDelete={onDelete}
               />
             ))}

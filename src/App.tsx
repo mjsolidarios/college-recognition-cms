@@ -8,6 +8,8 @@ import {
   GripVertical,
   LayoutGrid,
   Loader2,
+  PanelRightClose,
+  PanelRightOpen,
   Pencil,
   RefreshCw,
   RotateCcw,
@@ -247,6 +249,7 @@ function App() {
   const [pdfExportProgress, setPdfExportProgress] = useState<PdfExportProgress | null>(null)
   const [mobileTab, setMobileTab] = useState<MobileTab>('canvas')
   const [isPagesPanelCollapsed, setIsPagesPanelCollapsed] = useState(false)
+  const [isEditorPanelCollapsed, setIsEditorPanelCollapsed] = useState(false)
   const [isCanvasFocusMode, setIsCanvasFocusMode] = useState(false)
   const [editorWidth, setEditorWidth] = useState(DEFAULT_EDITOR_WIDTH)
   const dragRef = useRef<{ startX: number; startWidth: number } | null>(null)
@@ -280,7 +283,7 @@ function App() {
   )
 
   const renderedPages = useMemo(() => renderDocument(pages, settings), [pages, settings])
-  const previewSlotCount = renderedPages.length + (frontCover ? 1 : 0) + (backCover ? 1 : 0)
+  const previewSlotCount = renderedPages.length + 2
   const safePreviewPageIndex = Math.min(previewPageIndex, Math.max(0, previewSlotCount - 1))
 
   useEffect(() => {
@@ -586,12 +589,12 @@ function App() {
 
   const syncPreviewToPage = useCallback(
     (pageId: string) => {
-      const index = previewSlotIndexForPageId(renderedPages, pageId, { hasFrontCover: Boolean(frontCover) })
+      const index = previewSlotIndexForPageId(renderedPages, pageId, { hasFrontCover: true })
       if (index !== null) {
         setPreviewPageIndex(index)
       }
     },
-    [renderedPages, frontCover],
+    [renderedPages],
   )
 
   const handleSelectPage = useCallback(
@@ -614,13 +617,27 @@ function App() {
       }
       setFocusedLayoutItemId(itemId)
       const index = previewSlotIndexForLayoutItem(renderedPages, activePage.id, itemId, {
-        hasFrontCover: Boolean(frontCover),
+        hasFrontCover: true,
       })
       if (index !== null) {
         setPreviewPageIndex(index)
       }
     },
-    [activePage, frontCover, renderedPages],
+    [activePage, renderedPages],
+  )
+
+  const handleSelectSubpage = useCallback(
+    (pageId: string, sourcePageLocalIndex: number) => {
+      setActivePageId(pageId)
+      setFocusedLayoutItemId(null)
+      const renderedIndex = renderedPages.findIndex(
+        (page) => page.sourcePageId === pageId && page.sourcePageLocalIndex === sourcePageLocalIndex,
+      )
+      if (renderedIndex >= 0) {
+        setPreviewPageIndex(renderedIndex + 1)
+      }
+    },
+    [renderedPages],
   )
 
   const updateSetting = <K extends keyof CmsSettings>(key: K, value: CmsSettings[K]) => {
@@ -759,10 +776,19 @@ function App() {
   const handleMobileSelect = useCallback(
     (pageId: string) => {
       setActivePageId(pageId)
+      setFocusedLayoutItemId(null)
       syncPreviewToPage(pageId)
       setMobileTab('canvas')
     },
     [syncPreviewToPage],
+  )
+
+  const handleMobileSelectSubpage = useCallback(
+    (pageId: string, sourcePageLocalIndex: number) => {
+      handleSelectSubpage(pageId, sourcePageLocalIndex)
+      setMobileTab('canvas')
+    },
+    [handleSelectSubpage],
   )
 
   const handleMobileAdd = useCallback((type: PageType) => {
@@ -892,27 +918,43 @@ function App() {
 
   /* ── Shared editor/settings panel ──────────────────────── */
   const EditorSettingsPanel = (
-    <Tabs defaultValue="editor" className="min-h-0 flex flex-col h-full">
-      <TabsList className="grid w-full grid-cols-2 flex-shrink-0">
-        <TabsTrigger value="editor">Editor</TabsTrigger>
-        <TabsTrigger value="settings">Settings</TabsTrigger>
-      </TabsList>
+    <Tabs defaultValue="editor" className="min-h-0 flex h-full flex-col rounded-2xl border border-[var(--color-hairline)] bg-white p-2 shadow-[var(--shadow-panel)]">
+      <div className="flex flex-shrink-0 items-center gap-2">
+        <TabsList className="grid min-w-0 flex-1 grid-cols-2">
+          <TabsTrigger value="editor">Editor</TabsTrigger>
+          <TabsTrigger value="settings">Settings</TabsTrigger>
+        </TabsList>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="size-8 rounded-full border border-[var(--color-hairline)] bg-white text-[var(--color-muted)] hover:border-[var(--color-hairline-strong)] hover:bg-[var(--surface-canvas)]"
+          onClick={() => setIsEditorPanelCollapsed(true)}
+          aria-expanded
+          aria-label="Collapse editor panel"
+          title="Collapse editor panel"
+        >
+          <PanelRightClose className="size-4" />
+        </Button>
+      </div>
       <TabsContent value="editor" className="min-h-0 flex-1">
         <ScrollArea className="h-[calc(100vh-14rem)] xl:h-[calc(100vh-11rem)]">
-          {activePage ? (
-            <PageEditor
-              page={activePage}
-              onChange={handlePageChange}
-              selectedLayoutItemId={focusedLayoutItemId}
-              onLayoutItemSelect={handleLayoutItemSelect}
-              onPageMutation={handlePageMutation}
-            />
-          ) : null}
+          <div className="py-2 pr-2">
+            {activePage ? (
+              <PageEditor
+                page={activePage}
+                onChange={handlePageChange}
+                selectedLayoutItemId={focusedLayoutItemId}
+                onLayoutItemSelect={handleLayoutItemSelect}
+                onPageMutation={handlePageMutation}
+              />
+            ) : null}
+          </div>
         </ScrollArea>
       </TabsContent>
       <TabsContent value="settings" className="min-h-0 flex-1">
         <ScrollArea className="h-[calc(100vh-14rem)] xl:h-[calc(100vh-11rem)]">
-          <div className="space-y-3 pb-2">
+          <div className="space-y-3 py-2 pr-2">
             <div className="flex flex-col gap-2 rounded-lg border border-[var(--color-hairline)] bg-[var(--surface-canvas)] px-3 py-2.5">
               <p className="text-[11px] leading-snug text-[var(--color-muted)]">
                 Restore typography, layout, and display options to their defaults. Pages and document title are unchanged.
@@ -1328,6 +1370,28 @@ function App() {
     </Tabs>
   )
 
+  const CollapsedEditorPanel = (
+    <div className="flex h-full flex-col items-center rounded-2xl border border-[var(--color-hairline)] bg-white px-2 py-2 shadow-[var(--shadow-panel)]">
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon"
+        className="size-8 rounded-full border border-[var(--color-hairline)] bg-white text-[var(--color-muted)] hover:border-[var(--color-hairline-strong)] hover:bg-[var(--surface-canvas)]"
+        onClick={() => setIsEditorPanelCollapsed(false)}
+        aria-expanded={false}
+        aria-label="Expand editor panel"
+        title="Expand editor panel"
+      >
+        <PanelRightOpen className="size-4" />
+      </Button>
+      <div className="mt-4 flex flex-1 items-center justify-center">
+        <div className="rotate-90 whitespace-nowrap text-xs font-semibold uppercase tracking-[0.16em] text-[var(--color-muted)]">
+          Editor
+        </div>
+      </div>
+    </div>
+  )
+
   const renderCanvasPreview = () => (
     <CanvasPreview
       renderedPages={renderedPages}
@@ -1573,8 +1637,11 @@ function App() {
           <div className={cn('flex-shrink-0 transition-[width] duration-300 ease-out', isPagesPanelCollapsed ? 'w-[88px]' : 'w-[320px]')}>
             <PageList
               pages={pages}
+              renderedPages={renderedPages}
               activePageId={activePage?.id ?? ''}
+              activePreviewPageIndex={safePreviewPageIndex}
               onSelect={handleSelectPage}
+              onSelectSubpage={handleSelectSubpage}
               onAdd={handleAddPage}
               onDelete={handleDeletePage}
               onReorder={handleReorder}
@@ -1589,17 +1656,22 @@ function App() {
             {renderCanvasPreview()}
           </div>
 
-          <div
-            className="flex w-2 flex-shrink-0 cursor-col-resize items-center justify-center rounded"
-            onMouseDown={handleDragMouseDown}
-            title="Drag to resize editor"
-          >
-            <GripVertical className="size-3.5 text-[var(--color-muted-soft)]" />
-          </div>
+          {!isEditorPanelCollapsed ? (
+            <div
+              className="flex w-2 flex-shrink-0 cursor-col-resize items-center justify-center rounded"
+              onMouseDown={handleDragMouseDown}
+              title="Drag to resize editor"
+            >
+              <GripVertical className="size-3.5 text-[var(--color-muted-soft)]" />
+            </div>
+          ) : null}
 
           {/* Editor / Settings */}
-          <div className="flex-shrink-0" style={{ width: editorWidth }}>
-            {EditorSettingsPanel}
+          <div
+            className="flex-shrink-0 transition-[width] duration-300 ease-out"
+            style={{ width: isEditorPanelCollapsed ? 56 : editorWidth }}
+          >
+            {isEditorPanelCollapsed ? CollapsedEditorPanel : EditorSettingsPanel}
           </div>
         </div>
 
@@ -1608,8 +1680,11 @@ function App() {
           <div className={mobileTab === 'pages' ? 'block h-full' : 'hidden'}>
             <PageList
               pages={pages}
+              renderedPages={renderedPages}
               activePageId={activePage?.id ?? ''}
+              activePreviewPageIndex={safePreviewPageIndex}
               onSelect={handleMobileSelect}
+              onSelectSubpage={handleMobileSelectSubpage}
               onAdd={handleMobileAdd}
               onDelete={handleDeletePage}
               onReorder={handleReorder}

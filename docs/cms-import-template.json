@@ -1,0 +1,156 @@
+{
+  "version": 1,
+  "title": "College Recognition Program",
+  "exportedAt": "2026-05-18T00:00:00.000Z",
+  "frontCover": null,
+  "backCover": null,
+  "settings": {
+    "globalScale": 1,
+    "titleSize": 18,
+    "subtitleSize": 12,
+    "headingSize": 12,
+    "bodySize": 11.5,
+    "headingFont": "helvetica",
+    "bodyFont": "times",
+    "metaSize": 10.75,
+    "pageNumberSize": 10,
+    "pagePaddingTop": 36,
+    "pagePaddingBottom": 30,
+    "pagePaddingX": 40,
+    "columnGap": 14,
+    "lineHeight": 1.1,
+    "showPageNumbers": true,
+    "documentYear": "2025-2026",
+    "borderEnabled": false,
+    "borderStyle": "simple",
+    "borderWidth": 1,
+    "borderColor": "#1a1a1a",
+    "borderPadding": 12,
+    "borderSeparateSides": false,
+    "borderSvgLeft": null,
+    "borderSvgRight": null
+  },
+  "pages": [
+    {
+      "id": "core-officials",
+      "order": 0,
+      "type": "core",
+      "title": "College Officials",
+      "content": {
+        "heading": "UNIVERSITY NAME\nCOLLEGE NAME",
+        "subheading": "College and division officials",
+        "sections": [
+          {
+            "id": "core-officials-dean",
+            "title": "Dean",
+            "body": "FULL NAME"
+          },
+          {
+            "id": "core-officials-secretary",
+            "title": "College Secretary",
+            "body": "FULL NAME"
+          },
+          {
+            "id": "core-officials-department-1",
+            "title": "Department or Division Name",
+            "body": "Chair: FULL NAME\n\nPermanent Faculty:\nFULL NAME\nFULL NAME\n\nPart-time Lecturers:\nFULL NAME\nFULL NAME"
+          }
+        ]
+      }
+    },
+    {
+      "id": "program-main",
+      "order": 1,
+      "type": "program",
+      "title": "Program Flow",
+      "content": {
+        "heading": "PROGRAM",
+        "rows": [
+          {
+            "id": "program-1",
+            "leftTitle": "Program item title",
+            "leftBody": "Names, roles, or details for the left column item",
+            "rightTitle": "Program item title",
+            "rightBody": "Names, roles, or details for the right column item"
+          },
+          {
+            "id": "program-2",
+            "leftTitle": "Program item title",
+            "leftBody": "Names, roles, or details for the left column item",
+            "rightTitle": "Program item title",
+            "rightBody": "Names, roles, or details for the right column item"
+          }
+        ]
+      }
+    },
+    {
+      "id": "academic-awards",
+      "order": 2,
+      "type": "academic",
+      "title": "Academic Awardees",
+      "content": {
+        "heading": "ACADEMIC AWARDEES",
+        "entries": [
+          {
+            "id": "academic-1",
+            "gradeLevel": "4th Year Curriculum",
+            "category": "Gold Medals",
+            "award": "Bachelor of Science in Program Name",
+            "name": "FULL NAME"
+          },
+          {
+            "id": "academic-2",
+            "gradeLevel": "3rd Year Curriculum",
+            "category": "Silver Medals",
+            "award": "Bachelor of Science in Program Name",
+            "name": "FULL NAME"
+          }
+        ]
+      }
+    },
+    {
+      "id": "non-academic-awards",
+      "order": 3,
+      "type": "non-academic",
+      "title": "Non-Academic Awardees",
+      "content": {
+        "heading": "NON-ACADEMIC AWARDEES",
+        "entries": [
+          {
+            "id": "non-academic-1",
+            "category": "Individual Honors",
+            "award": "Award name",
+            "name": "FULL NAME"
+          },
+          {
+            "id": "non-academic-2",
+            "category": "Organization or Service Awards",
+            "award": "Award name",
+            "name": "FULL NAME"
+          }
+        ]
+      }
+    },
+    {
+      "id": "core-programs",
+      "order": 4,
+      "type": "core",
+      "title": "College Programs",
+      "content": {
+        "heading": "COLLEGE PROGRAMS",
+        "sections": [
+          {
+            "id": "core-programs-program-1",
+            "title": "Program Name",
+            "body": "Program description paragraph."
+          },
+          {
+            "id": "core-programs-closing",
+            "title": "Event Theme or Closing Section",
+            "body": "Closing description paragraph."
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -10,7 +10,7 @@ import {
   type DraggableAttributes,
   type DraggableSyntheticListeners,
 } from '@dnd-kit/core'
-import { ChevronDown, GripVertical, Plus, Trash2 } from 'lucide-react'
+import { ChevronDown, GripVertical, Plus, Search, Trash2, X } from 'lucide-react'
 
 import { BulkAddAcademicDialog, BulkAddNonAcademicDialog } from '@/components/bulk-add-dialog'
 import { useEffect, useRef, useState } from 'react'
@@ -40,6 +40,18 @@ const TYPE_COLORS: Record<string, string> = {
 
 const REORDER_ACTIVATION_DISTANCE = 8
 const REORDER_DROP_TARGET_CLASS = 'ring-2 ring-[color:color-mix(in_srgb,var(--color-primary)_18%,transparent)]'
+
+function normalizeSearchText(value: string) {
+  return value.trim().toLocaleLowerCase()
+}
+
+function matchesSearch(query: string, values: Array<string | undefined>) {
+  const normalizedQuery = normalizeSearchText(query)
+  if (!normalizedQuery) {
+    return true
+  }
+  return values.some((value) => value?.toLocaleLowerCase().includes(normalizedQuery))
+}
 
 function SectionLabel({ children }: { children: string }) {
   return <label className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--color-muted)]">{children}</label>
@@ -79,8 +91,11 @@ function CollapsibleItemCard({
     if (!isSelected) {
       return
     }
-    setIsOpen(true)
-    rootRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+    const frame = window.requestAnimationFrame(() => {
+      setIsOpen(true)
+      rootRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+    })
+    return () => window.cancelAnimationFrame(frame)
   }, [isSelected])
 
   return (
@@ -158,6 +173,59 @@ function AddButton({ children, onClick }: { children: React.ReactNode; onClick: 
       <Plus className="size-3.5" />
       {children}
     </button>
+  )
+}
+
+function EditorSearchBox({
+  value,
+  onChange,
+  totalCount,
+  visibleCount,
+}: {
+  value: string
+  onChange: (value: string) => void
+  totalCount: number
+  visibleCount: number
+}) {
+  const hasQuery = normalizeSearchText(value).length > 0
+
+  return (
+    <div className="space-y-1.5">
+      <SectionLabel>Search sections</SectionLabel>
+      <div className="relative">
+        <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-[var(--color-muted)]" />
+        <Input
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          className="pl-8 pr-8"
+          placeholder="Find text in this page"
+        />
+        {hasQuery ? (
+          <button
+            type="button"
+            className="absolute right-2 top-1/2 inline-flex size-5 -translate-y-1/2 items-center justify-center rounded text-[var(--color-muted)] hover:bg-[var(--surface-canvas)] hover:text-[var(--color-body)]"
+            onClick={() => onChange('')}
+            aria-label="Clear editor search"
+            title="Clear search"
+          >
+            <X className="size-3.5" />
+          </button>
+        ) : null}
+      </div>
+      {hasQuery ? (
+        <p className="text-[11px] text-[var(--color-muted)]">
+          Showing {visibleCount} of {totalCount} editable section{totalCount !== 1 ? 's' : ''}.
+        </p>
+      ) : null}
+    </div>
+  )
+}
+
+function NoSearchResults() {
+  return (
+    <div className="rounded-lg border border-dashed border-[var(--color-hairline)] bg-[var(--surface-canvas)] px-3 py-6 text-center text-xs text-[var(--color-muted)]">
+      No matching editable sections.
+    </div>
   )
 }
 
@@ -261,6 +329,10 @@ function ProgramEditor({
   onPageMutation?: (before: CmsPage, after: CmsPage) => void
 }) {
   const sensors = useEditorReorderSensor()
+  const [searchQuery, setSearchQuery] = useState('')
+  const visibleRows = page.content.rows.filter((row) =>
+    matchesSearch(searchQuery, [row.leftTitle, row.leftBody, row.rightTitle, row.rightBody]),
+  )
   const programColumnCardClassName = 'space-y-3 rounded-lg border border-[var(--color-hairline)] bg-white p-3'
   const updateRow = (rowId: string, updater: (row: ProgramRow) => ProgramRow) => {
     onChange({
@@ -299,6 +371,12 @@ function ProgramEditor({
           </div>
           <Input value={page.content.heading} onChange={(event) => onChange({ ...page, content: { ...page.content, heading: event.target.value } })} />
         </div>
+        <EditorSearchBox
+          value={searchQuery}
+          onChange={setSearchQuery}
+          totalCount={page.content.rows.length}
+          visibleCount={visibleRows.length}
+        />
 
         <div className="flex items-center gap-2 pt-1">
           <span className="text-xs font-semibold text-[var(--color-muted)]">{page.content.rows.length} row{page.content.rows.length !== 1 ? 's' : ''}</span>
@@ -307,7 +385,9 @@ function ProgramEditor({
 
         <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
           <div className="space-y-2">
-            {page.content.rows.map((row, index) => {
+            {visibleRows.length === 0 ? <NoSearchResults /> : null}
+            {visibleRows.map((row) => {
+              const index = page.content.rows.findIndex((item) => item.id === row.id)
               const hasRightColumn = row.rightTitle !== undefined || row.rightBody !== undefined
               const rightColumnToggleId = `program-row-two-column-${row.id}`
               return (
@@ -465,6 +545,10 @@ function AcademicEditor({
   onLayoutItemSelect?: (itemId: string | null) => void
 }) {
   const sensors = useEditorReorderSensor()
+  const [searchQuery, setSearchQuery] = useState('')
+  const visibleEntries = page.content.entries.filter((entry) =>
+    matchesSearch(searchQuery, [entry.name, entry.award, entry.category, entry.gradeLevel]),
+  )
   const updateEntry = (entryId: string, updater: (entry: AcademicEntry) => AcademicEntry) => {
     onChange({
       ...page,
@@ -500,6 +584,12 @@ function AcademicEditor({
           <SectionLabel>Heading</SectionLabel>
           <Input value={page.content.heading} onChange={(event) => onChange({ ...page, content: { ...page.content, heading: event.target.value } })} />
         </div>
+        <EditorSearchBox
+          value={searchQuery}
+          onChange={setSearchQuery}
+          totalCount={page.content.entries.length}
+          visibleCount={visibleEntries.length}
+        />
 
         <div className="flex items-center gap-2 pt-1">
           <span className="text-xs font-semibold text-[var(--color-muted)]">{page.content.entries.length} awardee{page.content.entries.length !== 1 ? 's' : ''}</span>
@@ -508,7 +598,10 @@ function AcademicEditor({
 
         <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
           <div className="space-y-2">
-            {page.content.entries.map((entry, index) => (
+            {visibleEntries.length === 0 ? <NoSearchResults /> : null}
+            {visibleEntries.map((entry) => {
+              const index = page.content.entries.findIndex((item) => item.id === entry.id)
+              return (
               <ReorderableItemCard
                 key={entry.id}
                 itemId={entry.id}
@@ -542,7 +635,8 @@ function AcademicEditor({
                   </div>
                 </div>
               </ReorderableItemCard>
-            ))}
+              )
+            })}
           </div>
         </DndContext>
         <div className="grid grid-cols-2 gap-2">
@@ -594,6 +688,10 @@ function NonAcademicEditor({
   onLayoutItemSelect?: (itemId: string | null) => void
 }) {
   const sensors = useEditorReorderSensor()
+  const [searchQuery, setSearchQuery] = useState('')
+  const visibleEntries = page.content.entries.filter((entry) =>
+    matchesSearch(searchQuery, [entry.name, entry.award, entry.category]),
+  )
   const updateEntry = (entryId: string, updater: (entry: NonAcademicEntry) => NonAcademicEntry) => {
     onChange({
       ...page,
@@ -629,6 +727,12 @@ function NonAcademicEditor({
           <SectionLabel>Heading</SectionLabel>
           <Input value={page.content.heading} onChange={(event) => onChange({ ...page, content: { ...page.content, heading: event.target.value } })} />
         </div>
+        <EditorSearchBox
+          value={searchQuery}
+          onChange={setSearchQuery}
+          totalCount={page.content.entries.length}
+          visibleCount={visibleEntries.length}
+        />
 
         <div className="flex items-center gap-2 pt-1">
           <span className="text-xs font-semibold text-[var(--color-muted)]">{page.content.entries.length} award{page.content.entries.length !== 1 ? 's' : ''}</span>
@@ -637,7 +741,10 @@ function NonAcademicEditor({
 
         <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
           <div className="space-y-2">
-            {page.content.entries.map((entry, index) => (
+            {visibleEntries.length === 0 ? <NoSearchResults /> : null}
+            {visibleEntries.map((entry) => {
+              const index = page.content.entries.findIndex((item) => item.id === entry.id)
+              return (
               <ReorderableItemCard
                 key={entry.id}
                 itemId={entry.id}
@@ -667,7 +774,8 @@ function NonAcademicEditor({
                   </div>
                 </div>
               </ReorderableItemCard>
-            ))}
+              )
+            })}
           </div>
         </DndContext>
         <div className="grid grid-cols-2 gap-2">
@@ -718,6 +826,10 @@ function CoreEditor({
   onLayoutItemSelect?: (itemId: string | null) => void
 }) {
   const sensors = useEditorReorderSensor()
+  const [searchQuery, setSearchQuery] = useState('')
+  const visibleSections = page.content.sections.filter((section) =>
+    matchesSearch(searchQuery, [section.title, section.body]),
+  )
   const updateSection = (sectionId: string, updater: (section: CoreSection) => CoreSection) => {
     onChange({
       ...page,
@@ -757,6 +869,12 @@ function CoreEditor({
           <SectionLabel>Subheading</SectionLabel>
           <Input value={page.content.subheading ?? ''} onChange={(event) => onChange({ ...page, content: { ...page.content, subheading: event.target.value } })} />
         </div>
+        <EditorSearchBox
+          value={searchQuery}
+          onChange={setSearchQuery}
+          totalCount={page.content.sections.length}
+          visibleCount={visibleSections.length}
+        />
 
         <div className="flex items-center gap-2 pt-1">
           <span className="text-xs font-semibold text-[var(--color-muted)]">{page.content.sections.length} section{page.content.sections.length !== 1 ? 's' : ''}</span>
@@ -765,7 +883,10 @@ function CoreEditor({
 
         <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
           <div className="space-y-2">
-            {page.content.sections.map((section, index) => (
+            {visibleSections.length === 0 ? <NoSearchResults /> : null}
+            {visibleSections.map((section) => {
+              const index = page.content.sections.findIndex((item) => item.id === section.id)
+              return (
               <ReorderableItemCard
                 key={section.id}
                 itemId={section.id}
@@ -794,7 +915,8 @@ function CoreEditor({
                   </div>
                 </div>
               </ReorderableItemCard>
-            ))}
+              )
+            })}
           </div>
         </DndContext>
         <AddButton

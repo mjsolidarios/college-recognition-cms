@@ -34,6 +34,7 @@ const gradeOrder = [
   gradeLabels['First Year'],
 ]
 const medalOrder = Object.values(medalLabels)
+const suffixPattern = /^(Jr\.?|Sr\.?|II|III|IV|V)$/i
 
 function clean(value) {
   return value
@@ -48,10 +49,32 @@ function clean(value) {
     .trim()
 }
 
+function normalizeStudentName(name) {
+  const parts = clean(name)
+    .replace(/,\s+/g, ' ')
+    .split(/\s+/)
+    .filter(Boolean)
+  const suffixIndex = parts.findIndex((part) => suffixPattern.test(part))
+  if (suffixIndex < 0 || suffixIndex === parts.length - 1) {
+    return parts.join(' ')
+  }
+  const [suffix] = parts.splice(suffixIndex, 1)
+  return [...parts, suffix.replace(/\.$/, '.')].join(' ')
+}
+
 function getLastNameSortKey(name) {
-  const withoutSuffix = clean(name).replace(/,\s*(Jr\.?|Sr\.?|I{2,3}|IV|V)$/i, '')
+  const withoutSuffix = normalizeStudentName(name).replace(/\s+(Jr\.?|Sr\.?|I{2,3}|IV|V)$/i, '')
   const parts = withoutSuffix.split(/\s+/).filter(Boolean)
   return (parts.at(-1) ?? withoutSuffix).toLocaleLowerCase('en')
+}
+
+function looksLikePersonName(value) {
+  const text = clean(value)
+  if (!text || /[:—"()]/.test(text) || /^(Team|Adviser|Co-adviser|Mentor|Mentors):?\b/i.test(text)) {
+    return false
+  }
+  const parts = text.split(/\s+/).filter(Boolean)
+  return parts.length >= 2 && parts.length <= 6
 }
 
 function compactLines(value) {
@@ -229,7 +252,7 @@ function parseAcademic(markdown) {
       continue
     }
 
-    const name = cells[1]
+    const name = normalizeStudentName(cells[1])
     if (!name || !year || !medal || !program) {
       continue
     }
@@ -278,72 +301,155 @@ function parseAcademic(markdown) {
 
 function parseNonAcademic(markdown) {
   const entries = []
-  let category = ''
-  let subcategory = ''
-  let carriedEvent = ''
+  const rawLines = markdown.split(/\r?\n/)
+  const firstSectionIndex = rawLines.findIndex((line) => /^##\s+/.test(line.trim()))
+  const preSectionLines = rawLines
+    .slice(0, firstSectionIndex < 0 ? rawLines.length : firstSectionIndex)
+    .map(clean)
+    .filter((line) => line && !line.startsWith('#') && line !== 'Non-Academic Awards' && line !== '---')
 
-  for (const rawLine of markdown.split(/\r?\n/)) {
-    const line = rawLine.trim()
-    if (!line || isTableSeparator(line)) {
+  for (let index = 0; index < preSectionLines.length; index += 2) {
+    const name = preSectionLines[index]
+    const award = preSectionLines[index + 1]
+    if (!name || !award) {
       continue
     }
+    entries.push({
+      id: `non-academic-${entries.length + 1}`,
+      category: 'Individual Honors',
+      award,
+      name,
+    })
+  }
 
-    const headingMatch = line.match(/^\*\*(.+?)\*\*$/)
-    if (headingMatch) {
-      const heading = clean(headingMatch[1])
-      const isLevelHeading = ['International', 'National', 'Regional', 'Local'].includes(heading)
-      if (isLevelHeading && category === 'Special Citation - Various Achievements') {
-        subcategory = heading
-      } else {
-        category = heading
-        subcategory = ''
+  let currentSection = ''
+  let currentLevel = ''
+  let currentAward = ''
+  let blockLines = []
+
+  const categoryForCurrentBlock = () =>
+    [currentSection, currentLevel].filter(Boolean).join(' - ') || 'Non-Academic Awards'
+
+  const isServiceListSection = () =>
+    currentSection === 'College Service Awards' ||
+    currentSection === 'Special Citation for Service'
+
+  const flushBlock = () => {
+    const lines = blockLines.map(clean).filter(Boolean)
+    blockLines = []
+    if (lines.length === 0) {
+      return
+    }
+
+    const category = categoryForCurrentBlock()
+
+    if (!currentAward) {
+      if (currentSection === 'College Service Awards') {
+        for (const line of lines) {
+          entries.push({
+            id: `non-academic-${entries.length + 1}`,
+            category,
+            award: line,
+            name: '',
+          })
+        }
+        return
       }
-      carriedEvent = ''
-      continue
+      entries.push({
+        id: `non-academic-${entries.length + 1}`,
+        category,
+        award: category,
+        name: lines.join('\n'),
+      })
+      return
     }
 
-    if (!line.startsWith('|')) {
-      continue
+    if (/^Best Thesis\b/.test(currentSection) && programNames[currentAward]) {
+      entries.push({
+        id: `non-academic-${entries.length + 1}`,
+        category,
+        award: lines[0],
+        name: lines.slice(1).join('\n'),
+      })
+      return
     }
 
-    const cells = splitRow(line)
-    if (cells.length < 2 || cells.every((cell) => !cell)) {
-      continue
+    if (
+      currentSection === 'Special Citation for Various Achievements' &&
+      lines.length > 1 &&
+      !looksLikePersonName(lines[0]) &&
+      !/^(Adviser|Co-adviser|Mentor|Mentors):/i.test(lines[0])
+    ) {
+      entries.push({
+        id: `non-academic-${entries.length + 1}`,
+        category,
+        award: lines[0],
+        name: lines.slice(1).join('\n'),
+      })
+      return
     }
 
-    const entryCategory = subcategory ? `${category} - ${subcategory}` : category || 'Non-Academic Awards'
-    let name = ''
-    let award = ''
-
-    if (cells.length >= 3) {
-      const event = cells[0] || carriedEvent
-      if (cells[0]) {
-        carriedEvent = cells[0]
-      }
-
-      if (cells[2]) {
-        name = cells[2]
-        award = [event, cells[1]].filter(Boolean).join(' - ')
-      } else {
-        name = event
-        award = cells[1]
-      }
-    } else {
-      name = cells[1]
-      award = cells[0]
-    }
-
-    if (!name && !award) {
-      continue
-    }
+    const shouldUseFirstLineAsAwardDetail =
+      lines.length > 1 &&
+      !isServiceListSection() &&
+      !looksLikePersonName(lines[0]) &&
+      !/^Team\b/i.test(lines[0]) &&
+      !/^(Adviser|Co-adviser|Mentor|Mentors):/i.test(lines[0])
 
     entries.push({
       id: `non-academic-${entries.length + 1}`,
-      category: entryCategory,
-      award: award || entryCategory,
-      name: name || award,
+      category,
+      award: shouldUseFirstLineAsAwardDetail ? `${currentAward} - ${lines[0]}` : currentAward,
+      name: (shouldUseFirstLineAsAwardDetail ? lines.slice(1) : lines).join('\n'),
     })
   }
+
+  for (const rawLine of rawLines.slice(Math.max(0, firstSectionIndex))) {
+    const line = rawLine.trim()
+
+    if (!line || line === '---') {
+      flushBlock()
+      if (isServiceListSection()) {
+        currentAward = ''
+      }
+      continue
+    }
+
+    const sectionMatch = line.match(/^##\s+(.+)$/)
+    if (sectionMatch) {
+      flushBlock()
+      currentSection = clean(sectionMatch[1])
+      currentLevel = ''
+      currentAward = ''
+      continue
+    }
+
+    const levelMatch = line.match(/^###\s+(.+)$/)
+    if (levelMatch) {
+      flushBlock()
+      currentLevel = clean(levelMatch[1])
+      currentAward = ''
+      continue
+    }
+
+    const awardMatch = line.match(/^\*\*(.+?)\*\*$/)
+    if (awardMatch) {
+      flushBlock()
+      currentAward = clean(awardMatch[1])
+      continue
+    }
+
+    if (line.startsWith('|') && !isTableSeparator(line)) {
+      const cells = splitRow(line)
+      if (cells.length >= 2 && cells.some(Boolean)) {
+        blockLines.push(cells.filter(Boolean).join(' - '))
+      }
+      continue
+    }
+
+    blockLines.push(line)
+  }
+  flushBlock()
 
   return entries
 }

@@ -416,7 +416,7 @@
 | 8 | K Giulian C. Cartojano | 1.5341 |
 | 9 | Gabrielle Ann B. Concepcion | 1.5170 |
 | 10 | Janel Shian E. Ellama | 1.5114 |
-| 11 | Seth Kyrios Vm P. Gaitano | 1.50 |
+| 11 | Seth Kyrios VM P. Gaitano | 1.50 |
 | 12 | Daniel Vincent M. Loma | 1.5739 |
 | 13 | Jennel F. Mabaquiao | 1.5455 |
 | 14 | Russel M. Soliman II | 1.5852 |
@@ -579,7 +579,7 @@
 | 15 | Duke Salfred B. Bocala | 1.2898 |
 | 16 | Zuriel Eliazar Dela Peña Calix | 1.375 |
 | 17 | Quinjie Benedict E. Capayan | 1.4091 |
-| 18 | Ralph Martin De La Fuente Chua | 1.4432 |
+| 18 | Ralph Martin D. Chua | 1.4432 |
 | 19 | Gabriel M. Diana | 1.3068 |
 | 20 | Ariane Pearl C. Gegawin | 1.2898 |
 | 21 | Joelmar D. Grecia | 1.3409 |
@@ -588,7 +588,7 @@
 | 24 | Christian Paulo C. Pillado | 1.3409 |
 | 25 | Ivan Clyde P. Sagala | 1.3580 |
 | 26 | Jazylle Mae B. Senibalo | 1.2557 |
-| 27 | Aurelio Inocencio III Sorongon Sua | 1.4432 |
+| 27 | Aurelio Inocencio S. Sua III | 1.4432 |
 | 28 | Leann M. Villaruel | 1.2898 |
 
 #### BSEMC
@@ -836,7 +836,7 @@
 | 29 | Car A. Torres | 1.35 |
 | 30 | Cyril Reynold S. Trojillo | 1.4375 |
 
-#### BSEMC
+#### BSIS
 | # | Name | GWA |
 |---|------|-----|
 | 1 | Rica Pearl E. Alamo | 1.27 |
@@ -859,7 +859,7 @@
 | 18 | Trisha G. Rubiato | 1.45 |
 | 19 | Edna Joyce B. Boteros | 1.48 |
 
-#### BSIS
+#### BSIT
 | # | Name | GWA |
 |---|------|-----|
 | 1 | Christa Isabelle M. Artaba | 1.27 |
